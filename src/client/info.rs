@@ -14,8 +14,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use serde::Serialize;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use crate::constant::Command;
+use crate::constant::{Command};
 use super::{PgmonetaClient, PgmonetaRequest};
 
 #[derive(Serialize, Clone)]
@@ -38,12 +37,9 @@ impl PgmonetaClient {
             request: info_request,
             header,
         };
+
         let request_str = serde_json::to_string(&request)?;
-        stream.write_all(request_str.as_bytes()).await?;
-
-        let mut response_str = String::new();
-        stream.read_to_string(&mut response_str).await?;
-
-        Ok(response_str)
+        Self::write_request(&request_str, &mut stream).await?;
+        Self::read_response(&mut stream).await
     }
 }

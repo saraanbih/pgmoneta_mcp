@@ -173,7 +173,7 @@ impl SecurityUtil {
         }
         let server_first_str = String::from_utf8(Vec::from(&server_first[Self::HEADER_OFFSET..n]))?;
         let scram = scram.handle_server_first(&server_first_str)?;
-        
+
         let (scram, client_final) = scram.client_final();
         let mut client_final_msg = Vec::new();
         let size = 1 + 4 + client_final.len();
@@ -189,6 +189,12 @@ impl SecurityUtil {
         }
         let server_final_str = String::from_utf8(Vec::from(&server_final[Self::HEADER_OFFSET..n]))?;
         scram.handle_server_final(&server_final_str)?;
+
+        let mut auth_success = [0u8; 256];
+        let n = stream.read(&mut auth_success).await?;
+        if n == 0 || auth_success[0] != b'R' {
+            return Err(anyhow!("Getting invalid auth success message {:?}", auth_success))
+        }
         Ok(stream)
     }
 

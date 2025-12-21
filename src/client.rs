@@ -19,6 +19,7 @@ use anyhow::anyhow;
 use serde::Serialize;
 use super::constant::*;
 use chrono::Local;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use super::security::SecurityUtil;
 use super::configuration::CONFIG;
@@ -78,5 +79,26 @@ impl PgmonetaClient {
         let stream =
             SecurityUtil::connect_to_server(&config.pgmoneta.host, config.pgmoneta.port, username, &password).await?;
         Ok(stream)
+    }
+
+    async fn write_request(request_str: &str, stream: &mut TcpStream) -> anyhow::Result<()> {
+        let mut request_buf = Vec::new();
+        request_buf.write_i32(request_str.len() as i32).await?;
+        request_buf.write(request_str.as_bytes()).await?;
+
+        stream.write_u8(Compression::NONE).await?;
+        stream.write_u8(Encryption::NONE).await?;
+        stream.write_all(request_buf.as_slice()).await?;
+        Ok(())
+    }
+
+    async fn read_response(stream: &mut TcpStream) -> anyhow::Result<String> {
+        let _compression = stream.read_u8().await?;
+        let _encryption = stream.read_u8().await?;
+        let _len = stream.read_u32().await?;
+        let mut response = [0u8; 1024];
+        let n = stream.read(&mut response).await?;
+        let response_str = String::from_utf8(Vec::from(&response[..n]))?;
+        Ok(response_str)
     }
 }
