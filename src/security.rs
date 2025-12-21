@@ -66,6 +66,9 @@ impl SecurityUtil {
         }
         let key_path = home_path.unwrap().join(MASTER_KEY_PATH);
         let key_encoded = self.base64_encode(key.as_bytes())?;
+        if let Some(parent) = key_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         fs::write(key_path, &key_encoded)?;
         Ok(())
     }

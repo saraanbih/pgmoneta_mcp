@@ -20,7 +20,6 @@ use tracing_subscriber::{self, EnvFilter};
 use clap::Parser;
 use pgmoneta_mcp::handler::PgmonetaHandler;
 use pgmoneta_mcp::configuration;
-use pgmoneta_mcp::constant::*;
 
 const BIND_ADDRESS: &str = "0.0.0.0";
 
@@ -31,11 +30,11 @@ const BIND_ADDRESS: &str = "0.0.0.0";
 )]
 struct Args {
     /// Path to pgmoneta users configuration file
-    #[arg(short, long, default_value = DEFAULT_USER_CONF)]
+    #[arg(short, long)]
     users: String,
 
     /// Path to pgmoneta MCP configuration file
-    #[arg(short, long, default_value = DEFAULT_CONF)]
+    #[arg(short, long)]
     conf: String,
 }
 
@@ -59,7 +58,10 @@ async fn main() -> anyhow::Result<()> {
     
     let router = axum::Router::new()
         .nest_service("/mcp", info_service);
-    let tcp_listener = tokio::net::TcpListener::bind(address).await?;
+    let tcp_listener = tokio::net::TcpListener::bind(&address).await?;
+
+    println!("Starting pgmoneta MCP server at {address}");
+
     let _ = axum::serve(tcp_listener, router)
         .with_graceful_shutdown(async { tokio::signal::ctrl_c().await.unwrap() })
         .await;

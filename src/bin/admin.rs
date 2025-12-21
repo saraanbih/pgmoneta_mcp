@@ -14,7 +14,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
-use pgmoneta_mcp::constant::*;
 use pgmoneta_mcp::security::SecurityUtil;
 use pgmoneta_mcp::configuration;
 use configuration::UserConf;
@@ -37,14 +36,14 @@ struct Args {
 enum Commands {
     /// User related operations
     User {
-        /// The user configuration file
-        #[arg(short, long, default_value = DEFAULT_USER_CONF)]
-        file: String,
         #[command(subcommand)]
         action: UserAction,
         /// The admin user
         #[arg(short = 'U', long)]
         user: String,
+        /// The user configuration file
+        #[arg(short = 'f', long)]
+        file: String,
     },
     MasterKey,
 }
@@ -99,6 +98,10 @@ impl User {
             } else {
                 return Err(anyhow!("Unable to find admins in user configuration"))
             }
+        }
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
         }
 
         let conf_str = toml::to_string(&conf)?;
