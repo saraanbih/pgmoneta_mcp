@@ -14,19 +14,16 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
-use pgmoneta_mcp::security::SecurityUtil;
-use pgmoneta_mcp::configuration;
 use configuration::UserConf;
-use std::path::Path;
-use std::fs;
-use std::collections::HashMap;
+use pgmoneta_mcp::configuration;
+use pgmoneta_mcp::security::SecurityUtil;
 use rpassword::prompt_password;
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 #[derive(Parser, Debug)]
-#[command(
-    name = "pgmoneta-mcp-admin",
-    about = "Pgmoneta-mcp admin tool"
-)]
+#[command(name = "pgmoneta-mcp-admin", about = "Pgmoneta-mcp admin tool")]
 struct Args {
     #[command(subcommand)]
     command: Commands,
@@ -56,18 +53,14 @@ enum UserAction {
         /// The admin user password
         #[arg(short, long)]
         password: String,
-    }
+    },
 }
 fn main() -> Result<()> {
     let args = Args::parse();
     match args.command {
-        Commands::User { action, user, file } => {
-            match action {
-                UserAction::Add { password } => {
-                    User::set_user(&file, &user, &password)?
-                }
-            }
-        }
+        Commands::User { action, user, file } => match action {
+            UserAction::Add { password } => User::set_user(&file, &user, &password)?,
+        },
         Commands::MasterKey => {
             MasterKey::set_master_key()?;
         }
@@ -82,7 +75,10 @@ impl User {
         let sutil = SecurityUtil::new();
         let mut conf: UserConf;
         let master_key = sutil.load_master_key().map_err(|e| {
-            anyhow!("Unable to load the master key, needed for adding user: {:?}", e)
+            anyhow!(
+                "Unable to load the master key, needed for adding user: {:?}",
+                e
+            )
         })?;
         let password_str = sutil.encrypt_to_base64_string(password.as_bytes(), &master_key[..])?;
 
@@ -96,7 +92,7 @@ impl User {
             if let Some(user_conf) = conf.get_mut("admins") {
                 user_conf.insert(user.to_string(), password_str);
             } else {
-                return Err(anyhow!("Unable to find admins in user configuration"))
+                return Err(anyhow!("Unable to find admins in user configuration"));
             }
         }
 
@@ -120,7 +116,7 @@ impl MasterKey {
         let m = prompt_password("Please enter your master key again").unwrap();
 
         if master_key != m {
-            return Err(anyhow!("Passwords do not match"))
+            return Err(anyhow!("Passwords do not match"));
         }
 
         sutil.write_master_key(&master_key)

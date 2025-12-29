@@ -34,7 +34,7 @@ impl Command {
         match command {
             Self::LIST_BACKUP => Ok("list-backup"),
             Self::INFO => Ok("info"),
-            default => Err(anyhow!("Unrecognized command enum: {default}"))
+            default => Err(anyhow!("Unrecognized command enum: {default}")),
         }
     }
 }
@@ -44,7 +44,7 @@ impl Format {
     pub fn translate_format_enum(format: u8) -> anyhow::Result<&'static str> {
         match format {
             Self::JSON => Ok("json"),
-            default => Err(anyhow!("Unrecognized format enum: {default}"))
+            default => Err(anyhow!("Unrecognized format enum: {default}")),
         }
     }
 }
@@ -92,7 +92,7 @@ impl Encryption {
             Encryption::AES_256_CTR => Ok("aes_256_ctr"),
             Encryption::AES_192_CTR => Ok("aes_192_ctr"),
             Encryption::AES_128_CTR => Ok("aes_128_ctr"),
-            default => Err(anyhow!("Unrecognized encryption enum: {default}"))
+            default => Err(anyhow!("Unrecognized encryption enum: {default}")),
         }
     }
 }

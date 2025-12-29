@@ -13,13 +13,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use clap::Parser;
+use pgmoneta_mcp::configuration;
+use pgmoneta_mcp::handler::PgmonetaHandler;
 use rmcp::transport::streamable_http_server::{
     StreamableHttpService, session::local::LocalSessionManager,
 };
 use tracing_subscriber::{self, EnvFilter};
-use clap::Parser;
-use pgmoneta_mcp::handler::PgmonetaHandler;
-use pgmoneta_mcp::configuration;
 
 const BIND_ADDRESS: &str = "0.0.0.0";
 
@@ -43,8 +43,10 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let config = configuration::load_configuration(&args.conf, &args.users)?;
     let address = format!("{BIND_ADDRESS}:{}", &config.port);
-    configuration::CONFIG.set(config).expect("CONFIG already initialized");
-    
+    configuration::CONFIG
+        .set(config)
+        .expect("CONFIG already initialized");
+
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env().add_directive(tracing::Level::DEBUG.into()))
         .with_writer(std::io::stderr)
@@ -53,11 +55,10 @@ async fn main() -> anyhow::Result<()> {
     let handler = StreamableHttpService::new(
         || Ok(PgmonetaHandler::new()),
         LocalSessionManager::default().into(),
-        Default::default()
+        Default::default(),
     );
-    
-    let router = axum::Router::new()
-        .nest_service("/mcp", handler);
+
+    let router = axum::Router::new().nest_service("/mcp", handler);
     let tcp_listener = tokio::net::TcpListener::bind(&address).await?;
 
     println!("Starting pgmoneta MCP server at {address}");

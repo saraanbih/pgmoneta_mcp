@@ -15,22 +15,19 @@
 
 mod info;
 
+use super::client::PgmonetaClient;
 use super::constant::*;
+use super::constant::{Command, Compression, Encryption};
+use crate::utils::Utility;
 use rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler,
-    handler::server::{
-        router::{tool::ToolRouter},
-        wrapper::Parameters,
-    },
+    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::*,
     service::RequestContext,
     tool, tool_handler, tool_router,
 };
-use serde_json::Value;
-use crate::utils::Utility;
-use super::constant::{Compression, Encryption, Command};
-use super::client::PgmonetaClient;
 use serde_json::Map;
+use serde_json::Value;
 
 #[derive(Clone)]
 pub struct PgmonetaHandler {
@@ -47,13 +44,20 @@ impl PgmonetaHandler {
 
     #[tool(description = "Say hello to the client")]
     fn say_hello(&self) -> Result<CallToolResult, McpError> {
-        Ok(CallToolResult::success(vec![Content::text("Hello from pgmoneta MCP server!")]))
+        Ok(CallToolResult::success(vec![Content::text(
+            "Hello from pgmoneta MCP server!",
+        )]))
     }
 
-    #[tool(description = "Get information of a backup using given backup ID and server name. \
+    #[tool(
+        description = "Get information of a backup using given backup ID and server name. \
     \"newest\", \"latest\" or \"oldest\" are also accepted as backup identifier.\
-    The username has to be one of the pgmoneta admins to be able to access pgmoneta")]
-    async fn get_backup_info(&self, Parameters(args): Parameters<info::InfoRequest>) -> Result<CallToolResult, McpError> {
+    The username has to be one of the pgmoneta admins to be able to access pgmoneta"
+    )]
+    async fn get_backup_info(
+        &self,
+        Parameters(args): Parameters<info::InfoRequest>,
+    ) -> Result<CallToolResult, McpError> {
         self._get_backup_info(args).await
     }
 }
@@ -64,36 +68,71 @@ impl PgmonetaHandler {
             McpError::parse_error(format!("Failed to parse result {result}: {:?}", e), None)
         })?;
         if !response.contains_key(MANAGEMENT_CATEGORY_OUTCOME) {
-            return Err(McpError::internal_error(format!("Fail to find outcome inside response {:?}", response), None));
+            return Err(McpError::internal_error(
+                format!("Fail to find outcome inside response {:?}", response),
+                None,
+            ));
         }
         if let Value::Object(outcome) = response.get(MANAGEMENT_CATEGORY_OUTCOME).unwrap() {
             if !outcome.contains_key(MANAGEMENT_ARGUMENT_STATUS) {
-                return Err(McpError::internal_error(format!("Fail to find status inside outcome {:?}", outcome), None));
+                return Err(McpError::internal_error(
+                    format!("Fail to find status inside outcome {:?}", outcome),
+                    None,
+                ));
             }
             if let &Value::Bool(status) = outcome.get(MANAGEMENT_ARGUMENT_STATUS).unwrap() {
                 if !status {
-                    return Err(McpError::invalid_request(format!("Getting false status inside outcome {:?}", outcome), None));
+                    return Err(McpError::invalid_request(
+                        format!("Getting false status inside outcome {:?}", outcome),
+                        None,
+                    ));
                 }
                 Ok(response)
             } else {
-                Err(McpError::internal_error(format!("Incorrect status type inside outcome {:?}, expect bool", outcome), None))
+                Err(McpError::internal_error(
+                    format!(
+                        "Incorrect status type inside outcome {:?}, expect bool",
+                        outcome
+                    ),
+                    None,
+                ))
             }
         } else {
-            Err(McpError::internal_error(format!("Incorrect outcome type inside response {:?}, expect json object", response), None))
+            Err(McpError::internal_error(
+                format!(
+                    "Incorrect outcome type inside response {:?}, expect json object",
+                    response
+                ),
+                None,
+            ))
         }
     }
 
     fn _translate_result<'a, M>(map: M) -> anyhow::Result<Map<String, Value>>
     where
-        M: IntoIterator<Item=(&'a String, &'a Value)>,
+        M: IntoIterator<Item = (&'a String, &'a Value)>,
     {
         // fields to be translated
         // file size, hex string, compression, encryption, command method, object(recursive)
-        let file_size_fields = vec!["BackupSize", "RestoreSize", "BiggestFileSize",
-                                    "Delta", "TotalSpace", "FreeSpace", "UsedSpace",
-                                    "WorkspaceFreeSpace", "HotStandbySize"];
-        let hex_string_fields = vec!["CheckpointHiLSN", "CheckpointLoLSN", "StartHiLSN",
-                                     "StartLoLSN", "EndHiLSN", "EndLoLSN", ];
+        let file_size_fields = vec![
+            "BackupSize",
+            "RestoreSize",
+            "BiggestFileSize",
+            "Delta",
+            "TotalSpace",
+            "FreeSpace",
+            "UsedSpace",
+            "WorkspaceFreeSpace",
+            "HotStandbySize",
+        ];
+        let hex_string_fields = vec![
+            "CheckpointHiLSN",
+            "CheckpointLoLSN",
+            "StartHiLSN",
+            "StartLoLSN",
+            "EndHiLSN",
+            "EndLoLSN",
+        ];
         let object_arr_fields = vec!["Backups"];
         let compression_field = "Compression";
         let encryption_field = "Encryption";

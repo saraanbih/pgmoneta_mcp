@@ -15,14 +15,14 @@
 
 mod info;
 
-use anyhow::anyhow;
-use serde::Serialize;
+use super::configuration::CONFIG;
 use super::constant::*;
+use super::security::SecurityUtil;
+use anyhow::anyhow;
 use chrono::Local;
+use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use super::security::SecurityUtil;
-use super::configuration::CONFIG;
 
 #[derive(Serialize, Clone)]
 struct RequestHeader {
@@ -70,14 +70,26 @@ impl PgmonetaClient {
         let security_util = SecurityUtil::new();
 
         if !config.admins.contains_key(username) {
-            return Err(anyhow!("request_backup_info: unable to find user {username}"));
+            return Err(anyhow!(
+                "request_backup_info: unable to find user {username}"
+            ));
         }
 
-        let password_encrypted = config.admins.get(username).expect("Username should be found");
+        let password_encrypted = config
+            .admins
+            .get(username)
+            .expect("Username should be found");
         let master_key = security_util.load_master_key()?;
-        let password = String::from_utf8(security_util.decrypt_from_base64_string(password_encrypted, &master_key[..])?)?;
-        let stream =
-            SecurityUtil::connect_to_server(&config.pgmoneta.host, config.pgmoneta.port, username, &password).await?;
+        let password = String::from_utf8(
+            security_util.decrypt_from_base64_string(password_encrypted, &master_key[..])?,
+        )?;
+        let stream = SecurityUtil::connect_to_server(
+            &config.pgmoneta.host,
+            config.pgmoneta.port,
+            username,
+            &password,
+        )
+        .await?;
         Ok(stream)
     }
 

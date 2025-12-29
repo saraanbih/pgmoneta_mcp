@@ -13,9 +13,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use serde::Serialize;
-use crate::constant::{Command};
 use super::{PgmonetaClient, PgmonetaRequest};
+use crate::constant::Command;
+use serde::Serialize;
 
 #[derive(Serialize, Clone)]
 struct InfoRequest {
@@ -26,7 +26,11 @@ struct InfoRequest {
 }
 
 impl PgmonetaClient {
-    pub async fn request_backup_info(username: &str, server: &str, backup: &str) -> anyhow::Result<String> {
+    pub async fn request_backup_info(
+        username: &str,
+        server: &str,
+        backup: &str,
+    ) -> anyhow::Result<String> {
         let info_request = InfoRequest {
             server: server.to_string(),
             backup: backup.to_string(),

@@ -14,10 +14,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use anyhow::anyhow;
-use std::collections::HashMap;
 use config::Config;
-use serde::{Deserialize, Serialize};
 use once_cell::sync::OnceCell;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 pub static CONFIG: OnceCell<Configuration> = OnceCell::new();
 pub type UserConf = HashMap<String, HashMap<String, String>>;
@@ -27,7 +27,7 @@ pub struct Configuration {
     pub pgmoneta: Pgmoneta,
     #[serde(default = "default_port")]
     pub port: i32,
-    pub admins: HashMap<String, String> //username -> password
+    pub admins: HashMap<String, String>, //username -> password
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -42,7 +42,12 @@ pub fn load_configuration(config_path: &str, user_path: &str) -> anyhow::Result<
         .add_source(config::File::with_name(user_path))
         .build()?;
     conf.try_deserialize::<Configuration>().map_err(|e| {
-        anyhow!("Error parsing configuration at path {}, user {}: {:?}", config_path, user_path, e)
+        anyhow!(
+            "Error parsing configuration at path {}, user {}: {:?}",
+            config_path,
+            user_path,
+            e
+        )
     })
 }
 
@@ -51,7 +56,11 @@ pub fn load_user_configuration(user_path: &str) -> anyhow::Result<UserConf> {
         .add_source(config::File::with_name(user_path))
         .build()?;
     conf.try_deserialize::<UserConf>().map_err(|e| {
-        anyhow!("Error parsing user configuration at path {}: {:?}", user_path, e)
+        anyhow!(
+            "Error parsing user configuration at path {}: {:?}",
+            user_path,
+            e
+        )
     })
 }
 

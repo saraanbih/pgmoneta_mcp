@@ -13,19 +13,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use anyhow::anyhow;
-use aes_gcm::{Aes256Gcm, Nonce};
+use crate::constant::MASTER_KEY_PATH;
 use aes_gcm::aead::{Aead, KeyInit};
-use base64::{Engine as _, alphabet, engine::{self, general_purpose}};
+use aes_gcm::{Aes256Gcm, Nonce};
+use anyhow::anyhow;
+use base64::{
+    Engine as _, alphabet,
+    engine::{self, general_purpose},
+};
 use home::home_dir;
 use rand::TryRngCore;
 use scram::ScramClient;
-use scrypt::{scrypt, Params};
+use scrypt::{Params, scrypt};
 use std::fs;
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use zeroize::Zeroize;
-use crate::constant::MASTER_KEY_PATH;
 
 const NONCE_LEN: usize = 12;
 const SALT_LEN: usize = 16;
@@ -52,7 +55,7 @@ impl SecurityUtil {
     pub fn load_master_key(&self) -> anyhow::Result<Vec<u8>> {
         let home_path = home_dir();
         if home_path.is_none() {
-            return Err(anyhow!("Unable to find home path"))
+            return Err(anyhow!("Unable to find home path"));
         }
         let key_path = home_path.unwrap().join(MASTER_KEY_PATH);
         let key = fs::read_to_string(key_path)?;
@@ -62,7 +65,7 @@ impl SecurityUtil {
     pub fn write_master_key(&self, key: &str) -> anyhow::Result<()> {
         let home_path = home_dir();
         if home_path.is_none() {
-            return Err(anyhow!("Unable to find home path"))
+            return Err(anyhow!("Unable to find home path"));
         }
         let key_path = home_path.unwrap().join(MASTER_KEY_PATH);
         let key_encoded = self.base64_encode(key.as_bytes())?;
@@ -73,7 +76,11 @@ impl SecurityUtil {
         Ok(())
     }
 
-    pub fn encrypt_to_base64_string(&self, plain_text: &[u8], master_key: &[u8]) -> anyhow::Result<String> {
+    pub fn encrypt_to_base64_string(
+        &self,
+        plain_text: &[u8],
+        master_key: &[u8],
+    ) -> anyhow::Result<String> {
         let (cipher_text, nonce_bytes, salt) = Self::encrypt_text(plain_text, master_key)?;
         let mut bytes = Vec::new();
         // nonce + salt + cipher text
@@ -83,14 +90,23 @@ impl SecurityUtil {
         self.base64_encode(bytes.as_slice())
     }
 
-    pub fn decrypt_from_base64_string(&self, cipher_text: &str, master_key: &[u8]) -> anyhow::Result<Vec<u8>> {
+    pub fn decrypt_from_base64_string(
+        &self,
+        cipher_text: &str,
+        master_key: &[u8],
+    ) -> anyhow::Result<Vec<u8>> {
         let cipher_text_bytes = self.base64_decode(cipher_text)?;
         if cipher_text_bytes.len() < SALT_LEN + NONCE_LEN {
-            return Err(anyhow!("Not enough bytes to decrypt the text"))
+            return Err(anyhow!("Not enough bytes to decrypt the text"));
         }
         let nonce: &[u8] = &cipher_text_bytes[..NONCE_LEN];
-        let salt: &[u8] = &cipher_text_bytes[NONCE_LEN..NONCE_LEN+SALT_LEN];
-        Self::decrypt_text(&cipher_text_bytes[(NONCE_LEN + SALT_LEN)..], master_key, nonce, salt)
+        let salt: &[u8] = &cipher_text_bytes[NONCE_LEN..NONCE_LEN + SALT_LEN];
+        Self::decrypt_text(
+            &cipher_text_bytes[(NONCE_LEN + SALT_LEN)..],
+            master_key,
+            nonce,
+            salt,
+        )
     }
 }
 
@@ -109,7 +125,10 @@ impl SecurityUtil {
         derived_key
     }
 
-    pub fn encrypt_text(plaintext: &[u8], master_key: &[u8]) -> anyhow::Result<(Vec<u8>, [u8; NONCE_LEN], [u8; SALT_LEN])> {
+    pub fn encrypt_text(
+        plaintext: &[u8],
+        master_key: &[u8],
+    ) -> anyhow::Result<(Vec<u8>, [u8; NONCE_LEN], [u8; SALT_LEN])> {
         // derive the key
         let mut salt = [0u8; SALT_LEN];
         let mut nonce_bytes = [0u8; NONCE_LEN];
@@ -120,29 +139,41 @@ impl SecurityUtil {
 
         let cipher = Aes256Gcm::new(derived_key);
         let nonce = Nonce::from_slice(&nonce_bytes);
-        let ciphertext = cipher.encrypt(nonce, plaintext)
-            .map_err(|e| { anyhow!("AES encryption failed {:?}", e) });
+        let ciphertext = cipher
+            .encrypt(nonce, plaintext)
+            .map_err(|e| anyhow!("AES encryption failed {:?}", e));
 
         derived_key_bytes.zeroize();
 
         Ok((ciphertext?, nonce_bytes, salt))
     }
 
-    pub fn decrypt_text(ciphertext: &[u8], master_key: &[u8], nonce_bytes: &[u8], salt: &[u8]) -> anyhow::Result<Vec<u8>> {
+    pub fn decrypt_text(
+        ciphertext: &[u8],
+        master_key: &[u8],
+        nonce_bytes: &[u8],
+        salt: &[u8],
+    ) -> anyhow::Result<Vec<u8>> {
         let mut derived_key_bytes = Self::derive_key(master_key, &salt);
         let derived_key = aes_gcm::Key::<Aes256Gcm>::from_slice(&derived_key_bytes);
         let cipher = Aes256Gcm::new(derived_key);
 
         let nonce = Nonce::from_slice(nonce_bytes);
-        let plaintext = cipher.decrypt(nonce, ciphertext)
-            .map_err(|e| { anyhow!("AES decryption failed {:?}", e) });
+        let plaintext = cipher
+            .decrypt(nonce, ciphertext)
+            .map_err(|e| anyhow!("AES decryption failed {:?}", e));
         derived_key_bytes.zeroize();
 
         Ok(plaintext?)
     }
 
     /// Connect to pgmoneta server using SCRAM-SHA-256 authentication.
-    pub async fn connect_to_server(host: &str, port: i32, username: &str, password: &str) -> anyhow::Result<TcpStream> {
+    pub async fn connect_to_server(
+        host: &str,
+        port: i32,
+        username: &str,
+        password: &str,
+    ) -> anyhow::Result<TcpStream> {
         let scram = ScramClient::new(username, password, None);
         let address = format!("{}:{}", host, port);
         let mut stream = TcpStream::connect(address).await?;
@@ -153,7 +184,10 @@ impl SecurityUtil {
         let mut startup_resp = [0u8; 256];
         let n = stream.read(&mut startup_resp).await?;
         if n == 0 || startup_resp[0] != b'R' {
-            return Err(anyhow!("Getting invalid startup response from server {:?}", startup_resp))
+            return Err(anyhow!(
+                "Getting invalid startup response from server {:?}",
+                startup_resp
+            ));
         }
 
         let (scram, client_first) = scram.client_first();
@@ -169,7 +203,10 @@ impl SecurityUtil {
         let mut server_first = [0u8; 256];
         let n = stream.read(&mut server_first).await?;
         if n == 0 || server_first[0] != b'R' {
-            return Err(anyhow!("Getting invalid server first message {:?}", server_first))
+            return Err(anyhow!(
+                "Getting invalid server first message {:?}",
+                server_first
+            ));
         }
         let server_first_str = String::from_utf8(Vec::from(&server_first[Self::HEADER_OFFSET..n]))?;
         let scram = scram.handle_server_first(&server_first_str)?;
@@ -185,7 +222,10 @@ impl SecurityUtil {
         let mut server_final = [0u8; 256];
         let n = stream.read(&mut server_final).await?;
         if n == 0 || server_final[0] != b'R' {
-            return Err(anyhow!("Getting invalid server final message {:?}", server_first))
+            return Err(anyhow!(
+                "Getting invalid server final message {:?}",
+                server_first
+            ));
         }
         let server_final_str = String::from_utf8(Vec::from(&server_final[Self::HEADER_OFFSET..n]))?;
         scram.handle_server_final(&server_final_str)?;
@@ -193,7 +233,10 @@ impl SecurityUtil {
         let mut auth_success = [0u8; 256];
         let n = stream.read(&mut auth_success).await?;
         if n == 0 || auth_success[0] != b'R' {
-            return Err(anyhow!("Getting invalid auth success message {:?}", auth_success))
+            return Err(anyhow!(
+                "Getting invalid auth success message {:?}",
+                auth_success
+            ));
         }
         Ok(stream)
     }
@@ -241,9 +284,11 @@ mod tests {
         let sutil = SecurityUtil::new();
         let master_key = "test_master_key_!@#$~<>?/".as_bytes();
         let text = "test_text_123_!@#$~<>?/";
-        let res = sutil.encrypt_to_base64_string(text.as_bytes(), master_key)
+        let res = sutil
+            .encrypt_to_base64_string(text.as_bytes(), master_key)
             .expect("Encryption should succeed");
-        let decrypted_text = sutil.decrypt_from_base64_string(&res, master_key)
+        let decrypted_text = sutil
+            .decrypt_from_base64_string(&res, master_key)
             .expect("Decryption should succeed");
         assert_eq!(decrypted_text, text.as_bytes())
     }

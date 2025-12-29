@@ -13,11 +13,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use rmcp::model::{CallToolResult, Content};
-use rmcp::schemars;
 use super::PgmonetaClient;
 use super::PgmonetaHandler;
-use rmcp::{ErrorData as McpError};
+use rmcp::ErrorData as McpError;
+use rmcp::model::{CallToolResult, Content};
+use rmcp::schemars;
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct InfoRequest {
@@ -27,17 +27,32 @@ pub struct InfoRequest {
 }
 
 impl PgmonetaHandler {
-    pub(super) async fn _get_backup_info(&self, request: InfoRequest) -> Result<CallToolResult, McpError> {
-        let result = PgmonetaClient::request_backup_info(&request.username, &request.server, &request.backup_id).await.map_err(
-            |e| McpError::internal_error(format!("Failed to retrieve backup information: {:?}", e), None)
-        )?;
+    pub(super) async fn _get_backup_info(
+        &self,
+        request: InfoRequest,
+    ) -> Result<CallToolResult, McpError> {
+        let result = PgmonetaClient::request_backup_info(
+            &request.username,
+            &request.server,
+            &request.backup_id,
+        )
+        .await
+        .map_err(|e| {
+            McpError::internal_error(
+                format!("Failed to retrieve backup information: {:?}", e),
+                None,
+            )
+        })?;
         let result = Self::_parse_and_check_result(&result)?;
-        let trans_res = Self::_translate_result(&result).map_err(
-            |e| McpError::internal_error(format!("Failed to translate some of the result fields: {:?}", e), None)
-        )?;
-        let trans_res_str = serde_json::to_string(&trans_res).map_err(
-            |e| McpError::internal_error(format!("Failed to serialize result: {:?}", e), None)
-        )?;
+        let trans_res = Self::_translate_result(&result).map_err(|e| {
+            McpError::internal_error(
+                format!("Failed to translate some of the result fields: {:?}", e),
+                None,
+            )
+        })?;
+        let trans_res_str = serde_json::to_string(&trans_res).map_err(|e| {
+            McpError::internal_error(format!("Failed to serialize result: {:?}", e), None)
+        })?;
         Ok(CallToolResult::success(vec![Content::text(trans_res_str)]))
     }
 }
