@@ -33,7 +33,7 @@ This will prompt you to input your master key.
 Add the same user and password you added to pgmoneta server to pgmoneta MCP server, creating or updating
 your user configuration toml file.
 ```
-pgmoneta-mcp-admin user -u <your_user_id> -f <your_mcp_user_conf.conf> add -p <your_password>
+pgmoneta-mcp-admin user -U <your_user_id> -P <your_password> -f <your_mcp_user_conf.conf> add
 ```
 
 ## Configure pgmoneta MCP server
