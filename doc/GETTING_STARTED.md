@@ -62,7 +62,7 @@ is what you'll run your MCP server at.
 First check again if your pgmoneta server is up and running. Then to start the server, run
 
 ```
-pgmoneta-mcp-server -c pgmoneta_mcp.conf -u pgmoneta_mcp_users.conf
+pgmoneta-mcp-server -c pgmoneta-mcp.conf -u pgmoneta-mcp-users.conf
 ```
 
 The defaults for configuration is `/etc/pgmoneta-mcp/pgmoneta-mcp.conf` and for users it is
