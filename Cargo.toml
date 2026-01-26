@@ -51,4 +51,5 @@ chrono = "0.4.42"
 rpassword = "7.4.0"
 serde_ini = "0.2.0"
 tracing-appender = "0.2.4"
+syslog-tracing = "0.3.1"
 

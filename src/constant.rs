@@ -502,4 +502,5 @@ impl LogLevel {
 impl LogType {
     pub const CONSOLE: &str = "console";
     pub const FILE: &str = "file";
+    pub const SYSLOG: &str = "syslog";
 }

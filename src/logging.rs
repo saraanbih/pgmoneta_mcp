@@ -14,6 +14,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::constant::{LogLevel, LogType};
+use syslog_tracing::Syslog;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling;
@@ -71,6 +72,12 @@ impl Logger {
                 let file_appender = rolling::never(".", log_path);
                 let (writer, _guard) = tracing_appender::non_blocking(file_appender);
                 (BoxMakeWriter::new(writer), Some(_guard))
+            }
+            LogType::SYSLOG => {
+                let identity = c"pgmoneta-mcp";
+                let (options, facility) = Default::default();
+                let syslog = Syslog::new(identity, options, facility).unwrap();
+                (BoxMakeWriter::new(syslog), None)
             }
             _ => (BoxMakeWriter::new(std::io::stderr), None),
         }
