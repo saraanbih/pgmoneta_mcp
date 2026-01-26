@@ -14,6 +14,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::constant::{LogLevel, LogType};
+use crate::constant::LogMode;
+use std::fs::OpenOptions;
 use syslog_tracing::Syslog;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking::WorkerGuard;
@@ -33,8 +35,9 @@ impl Logger {
         log_type: &str,
         log_format: &str,
         log_path: &str,
+        log_mode: &str,
     ) -> Option<WorkerGuard> {
-        let (writer, guard) = Self::make_writer(log_type, log_path);
+        let (writer, guard) = Self::make_writer(log_type, log_path, log_mode);
         let level = Self::get_level(log_level);
         let targets = Targets::new()
             .with_target("pgmoneta_mcp", level)
@@ -65,14 +68,32 @@ impl Logger {
         }
     }
 
-    fn make_writer(log_type: &str, log_path: &str) -> (BoxMakeWriter, Option<WorkerGuard>) {
+    fn make_writer(
+        log_type: &str,
+        log_path: &str,
+        log_mode: &str,
+    ) -> (BoxMakeWriter, Option<WorkerGuard>) {
         match log_type {
             LogType::CONSOLE => (BoxMakeWriter::new(std::io::stderr), None),
-            LogType::FILE => {
-                let file_appender = rolling::never(".", log_path);
-                let (writer, _guard) = tracing_appender::non_blocking(file_appender);
-                (BoxMakeWriter::new(writer), Some(_guard))
-            }
+            LogType::FILE => match log_mode {
+                LogMode::CREATE => {
+                    let file = OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(log_path)
+                        .unwrap_or_else(|_| panic!("Failed to open log file: {}", log_path));
+
+                    let (writer, _guard) = tracing_appender::non_blocking(file);
+                    (BoxMakeWriter::new(writer), Some(_guard))
+                }
+                LogMode::APPEND => {
+                    let file_appender = rolling::never(".", log_path);
+                    let (writer, _guard) = tracing_appender::non_blocking(file_appender);
+                    (BoxMakeWriter::new(writer), Some(_guard))
+                }
+                _ => (BoxMakeWriter::new(std::io::stderr), None),
+            },
             LogType::SYSLOG => {
                 let identity = c"pgmoneta-mcp";
                 let (options, facility) = Default::default();

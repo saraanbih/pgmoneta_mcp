@@ -17,6 +17,7 @@ The other section, called `[pgmoneta]`, is where you configure connection with `
 | log_type | console | String | No | The logging type (console, file, syslog) |
 | log_level | info | String | No | The logging level, any of the strings `trace`, `debug`, `info`, `warn` and `error`|
 | log_path | pgmoneta_mcp.log | String | No | The log file location |
+| log_mode | append | String | No | Append to or create the log file, any of the strings (`append`, `create`) |
 
 ## [pgmoneta]
 

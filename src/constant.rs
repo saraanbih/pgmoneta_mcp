@@ -31,6 +31,7 @@ pub struct Sort;
 pub struct LogLevel;
 
 pub struct LogType;
+pub struct LogMode;
 
 impl Command {
     pub const LIST_BACKUP: u32 = 2;
@@ -503,4 +504,9 @@ impl LogType {
     pub const CONSOLE: &str = "console";
     pub const FILE: &str = "file";
     pub const SYSLOG: &str = "syslog";
+}
+
+impl LogMode {
+    pub const APPEND: &str = "append";
+    pub const CREATE: &str = "create";
 }

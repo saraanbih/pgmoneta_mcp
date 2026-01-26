@@ -48,6 +48,8 @@ pub struct PgmonetaMcpConfiguration {
     pub log_type: String,
     #[serde(default = "default_log_line_prefix")]
     pub log_line_prefix: String,
+    #[serde(default = "default_log_mode")]
+    pub log_mode: String,
 }
 
 pub fn load_configuration(config_path: &str, user_path: &str) -> anyhow::Result<Configuration> {
@@ -96,4 +98,8 @@ fn default_log_type() -> String {
 
 fn default_log_line_prefix() -> String {
     "%Y-%m-%d %H:%M:%S".to_string()
+}
+
+fn default_log_mode() -> String {
+    "append".to_string()
 }
