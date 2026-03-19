@@ -71,7 +71,7 @@ get_image_name() {
     local container_engine="$(get_container_engine)"
 
     if [[ "$container_engine" == "docker" ]]; then
-        IMAGE_REF="docker.io/library/$IMAGE_NAME"
+        IMAGE_REF="$IMAGE_NAME"
         RUN_REPLACE_FLAG=""
     else
         IMAGE_REF="localhost/$IMAGE_NAME"
@@ -81,7 +81,7 @@ get_image_name() {
 
 start_container() {
     local container_engine="$(get_container_engine)"
-    $container_engine run -p $MANAGEMENT_PORT:$MANAGEMENT_PORT -p $PGMONETA_PORT_ONE:$PGMONETA_PORT_ONE -p $PGMONETA_PORT_TWO:$PGMONETA_PORT_TWO -p $POSTGRESQL_PORT:$POSTGRESQL_PORT --name "$CONTAINER_NAME" -d -e PG_DATABASE="$PG_DATABASE" -e PG_USER_NAME="$PG_USER_NAME" -e PG_USER_PASSWORD="$PG_USER_PASSWORD" -e PG_NETWORK_MASK="$PG_NETWORK_MASK" -e PG_PRIMARY_NAME="$PG_PRIMARY_NAME" -e PG_PRIMARY_PORT="$PG_PRIMARY_PORT" -e PG_REPL_USER_NAME="$PG_REPL_USER_NAME" -e PG_REPL_USER_PASSWORD="$PG_REPL_USER_PASSWORD" "$RUN_REPLACE_FLAG" "$IMAGE_REF"
+    $container_engine run -p $MANAGEMENT_PORT:$MANAGEMENT_PORT -p $PGMONETA_PORT_ONE:$PGMONETA_PORT_ONE -p $PGMONETA_PORT_TWO:$PGMONETA_PORT_TWO -p $POSTGRESQL_PORT:$POSTGRESQL_PORT --name "$CONTAINER_NAME" -d -e PG_DATABASE="$PG_DATABASE" -e PG_USER_NAME="$PG_USER_NAME" -e PG_USER_PASSWORD="$PG_USER_PASSWORD" -e PG_NETWORK_MASK="$PG_NETWORK_MASK" -e PG_PRIMARY_NAME="$PG_PRIMARY_NAME" -e PG_PRIMARY_PORT="$PG_PRIMARY_PORT" -e PG_REPL_USER_NAME="$PG_REPL_USER_NAME" -e PG_REPL_USER_PASSWORD="$PG_REPL_USER_PASSWORD" $RUN_REPLACE_FLAG "$IMAGE_REF"
 }
 
 start_composed_container() {
@@ -133,6 +133,7 @@ check_container_exists() {
             cd "$TEST_SUITE_DIR"
             $container_engine start "$container_name"
             cd "$SCRIPT_DIR"
+            wait_for_pgmoneta_startup
             return 0
         fi
     fi
@@ -368,6 +369,68 @@ cleanup() {
     cd "$SCRIPT_DIR"
 }
 
+show_status() {
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "                pgmoneta-mcp Test Environment Status               "
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Container engine
+    local engine
+    engine="$(get_container_engine)"
+    echo "Engine   : $engine"
+
+    # Image
+    get_image_name
+    if $engine images --format "{{.Repository}}" 2>/dev/null | grep -q "$IMAGE_NAME"; then
+        echo "Image    : $IMAGE_NAME (found)"
+    else
+        echo "Image    : $IMAGE_NAME (not built)"
+    fi
+
+    # Container
+    if $engine ps --format "{{.Names}}" 2>/dev/null | grep -q "$CONTAINER_NAME"; then
+        echo "Container: $CONTAINER_NAME (running)"
+    elif $engine ps -a --format "{{.Names}}" 2>/dev/null | grep -q "$CONTAINER_NAME"; then
+        echo "Container: $CONTAINER_NAME (stopped)"
+    else
+        echo "Container: $CONTAINER_NAME (not created)"
+    fi
+
+    echo ""
+
+    # Ports
+    echo "Ports:"
+    local ports=( 
+        "$MANAGEMENT_PORT (Management) " 
+        "$PGMONETA_PORT_ONE (PgmonetaOne)" 
+        "$PGMONETA_PORT_TWO (PgmonetaTow)" 
+        "$POSTGRESQL_PORT (PostgreSQL) " 
+    )
+    for p_info in "${ports[@]}"; do
+        local port="${p_info%% *}"
+        local label="${p_info#* }"
+        if nc -z localhost "$port" 2>/dev/null; then
+            echo "   $port $label: in use"
+        else
+            echo "   $port $label: free"
+        fi
+    done
+
+    echo ""
+
+    # Master key
+    echo "Auth:"
+    if [[ -s "$MCP_MASTER_KEY_FILE" ]]; then
+        echo "   Master key: found ($MCP_MASTER_KEY_FILE)"
+    elif [[ -s "$PGMONETA_MASTER_KEY_FILE" ]]; then
+        echo "   Master key: found ($PGMONETA_MASTER_KEY_FILE)"
+    else
+        echo "   Master key: not found"
+    fi
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
 install_dependencies() {
     echo "Installing dependencies..."
     dnf update -y
@@ -387,6 +450,7 @@ usage() {
    echo " integration    Starts the composed container and run only integration tests (clean + build + integration)"
    echo " unit           Starts the composed container and run only unit tests (clean + build + unit)"
    echo " ci             Run full test suite with CI-specific settings"
+   echo " status         Show test environment status (image, container, ports, master key)"
    echo "Options (run tests with optional filter; default is full suite):"
    echo " -m, --module NAME   Run all tests in module NAME"
    echo "Examples:"
@@ -443,6 +507,11 @@ case "$1" in
         SUBCOMMAND="ci"
         shift
         ;;
+    status)
+        [[ -n "$SUBCOMMAND" ]] && usage
+        SUBCOMMAND="status"
+        shift
+        ;;
     -h|--help)
         usage
         ;;
@@ -463,70 +532,67 @@ if [[ -n "$MODULE_FILTER" ]] && [[ -n "$SUBCOMMAND" ]] && \
     usage
 fi
 
-if [[ "$SUBCOMMAND" == "setup" ]]; then 
-    install_dependencies
-    echo "Dependencies installed."
-    exit 0
-fi
-if [[ "$SUBCOMMAND" == "build" ]]; then
-    handle_master_key
-    build_test_suite
-    echo "Test suite environment set up."
-    exit 0
-fi
-if [[ "$SUBCOMMAND" == "clean" ]]; then
-    cleanup
-    echo "Test suite environment cleaned."
-    exit 0
-fi
-if [[ "$SUBCOMMAND" == "test" ]]; then
-    handle_master_key
-    build_test_suite
-    start_composed_container
-    trap stop_composed_container EXIT
-    if [[ -n "$MODULE_FILTER" ]]; then
-        cargo test --all-features -- --test-threads=1 --nocapture -- $MODULE_FILTER
-    else 
-        cargo test --all-features -- --test-threads=1 --nocapture
-    fi
-    exit 0
-fi
-if [[ "$SUBCOMMAND" == "integration" ]]; then
-    handle_master_key
-    build_test_suite
-    start_composed_container
-    trap stop_composed_container EXIT
-    if [[ -n "$MODULE_FILTER" ]]; then
-        cargo test --test "*" -- --test-threads=1 --nocapture -- $MODULE_FILTER
-    else 
-        cargo test --test "*" -- --test-threads=1 --nocapture
-    fi
-    exit 0
-fi
-if [[ "$SUBCOMMAND" == "unit" ]]; then
-    if [[ -n "$MODULE_FILTER" ]]; then
-        cargo test --lib -- --test-threads=1 --nocapture -- $MODULE_FILTER
-    else 
-        cargo test --lib -- --test-threads=1 --nocapture
-    fi
-    exit 0
-fi
-if [[ "$SUBCOMMAND" == "ci" ]]; then
-    trap ci_shutdown EXIT
-    ci_setup
-    cargo test -- --test-threads=1 --nocapture
-    exit 0
-fi
-if [[ -z "$SUBCOMMAND" ]]; then
-    cleanup
-    handle_master_key
-    build_test_suite
-    start_composed_container
-    trap stop_composed_container EXIT
-    if [[ -n "$MODULE_FILTER" ]]; then
-        cargo test -- --test-threads=1 --nocapture -- $MODULE_FILTER
-    else 
+case "$SUBCOMMAND" in
+    setup)
+        install_dependencies
+        echo "Dependencies installed."
+        ;;
+    build)
+        handle_master_key
+        build_test_suite
+        echo "Test suite environment set up."
+        ;;
+    clean)
+        cleanup
+        echo "Test suite environment cleaned."
+        ;;
+    status)
+        show_status
+        ;;
+    test)
+        handle_master_key
+        build_test_suite
+        start_composed_container
+        trap stop_composed_container EXIT
+        if [[ -n "$MODULE_FILTER" ]]; then
+            cargo test --all-features -- --test-threads=1 --nocapture -- $MODULE_FILTER
+        else
+            cargo test --all-features -- --test-threads=1 --nocapture
+        fi
+        ;;
+    integration)
+        handle_master_key
+        build_test_suite
+        start_composed_container
+        trap stop_composed_container EXIT
+        if [[ -n "$MODULE_FILTER" ]]; then
+            cargo test --test "*" -- --test-threads=1 --nocapture -- $MODULE_FILTER
+        else
+            cargo test --test "*" -- --test-threads=1 --nocapture
+        fi
+        ;;
+    unit)
+        if [[ -n "$MODULE_FILTER" ]]; then
+            cargo test --lib -- --test-threads=1 --nocapture -- $MODULE_FILTER
+        else
+            cargo test --lib -- --test-threads=1 --nocapture
+        fi
+        ;;
+    ci)
+        trap ci_shutdown EXIT
+        ci_setup
         cargo test -- --test-threads=1 --nocapture
-    fi
-    exit 0
-fi
+        ;;
+    "")
+        cleanup
+        handle_master_key
+        build_test_suite
+        start_composed_container
+        trap stop_composed_container EXIT
+        if [[ -n "$MODULE_FILTER" ]]; then
+            cargo test -- --test-threads=1 --nocapture -- $MODULE_FILTER
+        else
+            cargo test -- --test-threads=1 --nocapture
+        fi
+        ;;
+esac
