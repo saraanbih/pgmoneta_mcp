@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+pub mod conf;
 pub mod hello;
 pub mod info;
 pub mod retention;
@@ -54,6 +55,10 @@ impl PgmonetaHandler {
             .with_async_tool::<retention::RetainBackupTool>()
             .with_async_tool::<retention::ExpungeBackupTool>()
             .with_async_tool::<shutdown::ShutdownTool>()
+            .with_async_tool::<conf::ConfReloadTool>()
+            .with_async_tool::<conf::ConfLsTool>()
+            .with_async_tool::<conf::ConfGetTool>()
+            .with_async_tool::<conf::ConfSetTool>()
     }
 }
 
