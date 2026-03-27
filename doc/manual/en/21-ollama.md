@@ -46,15 +46,12 @@ Before using a model, download it locally. The model name here must match exactl
 
 ``` sh
 ollama pull llama3.1
-```
-
-``` sh
 ollama pull qwen2.5:3b
 ```
 
-#### Verify downloaded models
+**Verify downloaded models**
 
-Use `ollama list` to see all models installed on your system:
+To see all models installed on your system:
 
 ``` sh
 ollama list

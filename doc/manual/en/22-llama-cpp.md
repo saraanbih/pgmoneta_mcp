@@ -4,6 +4,7 @@
 [llama.cpp](https://github.com/ggml-org/llama.cpp) is a high-performance C++ library for running LLMs locally. It allows granular control over GPU offloading, context windows, and threading, making it suitable for users who require direct control over hardware and model configuration.
 
 Using `llama.cpp` with `pgmoneta-mcp` requires:
+
 1. Manually downloading model files (`.gguf`).
 2. Running the `llama-server` process yourself.
 
@@ -17,7 +18,7 @@ Instructions can be found on the [llama.cpp releases page](https://github.com/gg
 
 `llama.cpp` does not have a built-in model registry. You must find, evaluate, and download a `.gguf` model file manually.
 
-#### Step 1: Find a model on Hugging Face
+**Step 1: Find a model on Hugging Face**
 
 Go to [huggingface.co](https://huggingface.co/) and search for a model name followed by `GGUF`, for example:
 
@@ -25,9 +26,9 @@ Go to [huggingface.co](https://huggingface.co/) and search for a model name foll
 Qwen2.5-7B-Instruct GGUF
 ```
 
-Look for repositories from trusted authors such as `bartowski` or the original model author. 
+Look for repositories from trusted authors such as `bartowski` or the original model author.
 
-#### Step 2: Choose your model
+**Step 2: Choose your model**
 
 As explained in the general LLM chapter (`20-llm.md`), `.gguf` filenames encode the parameter count (`xB`) and quantization level (`Q`). `Q4_K_M` is the recommended balance of speed, size, and reasoning quality.
 
@@ -41,7 +42,7 @@ For **pgmoneta_mcp**, the following specific files are suitable choices:
 | `Qwen2.5-3B-Instruct-Q4_K_M.gguf` | ~1.9 GB | ~4 GB | Lower hardware requirement, some accuracy trade-off |
 | `Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf` | ~4.7 GB | ~8 GB | Widely used, good general reasoning |
 
-#### Step 3: Download the file
+**Step 3: Download the file**
 
 Use the Hugging Face web interface or the CLI:
 

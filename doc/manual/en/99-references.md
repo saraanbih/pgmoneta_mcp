@@ -1,4 +1,5 @@
 [pgmoneta]: https://pgmoneta.github.io/
+[pgmoneta_mcp]: https://github.com/pgmoneta/pgmoneta_mcp
 [postgresql]: https://www.postgresql.org
 
 [git_squash]: https://www.git-tower.com/learn/git/faq/git-squash

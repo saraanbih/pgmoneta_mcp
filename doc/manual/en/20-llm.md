@@ -51,13 +51,14 @@ between ease of use and granular control.
 | **Model Management** | Built-in CLI (`pull`, `list`) | Manual download of `.gguf` files |
 | **Ease of Use** | High (recommended for beginners) | Advanced (manual configuration) |
 | **Control** | Automatic hardware detection | Granular threading/GPU/RAM control |
-| **Performance** | Excellent (balanced) | Maximum (optimized for specific hardware) |
+| **Performance** | Excellent (balanced) | Maximum (optimized for specific hardware** |
 
 ### Pros and Cons
 
-#### Ollama
+**Ollama**
 
 **Pros:**
+
 * **Simple installation**: A single binary or system package — no compilation required.
 * **Built-in model management**: Download, list, and switch models using familiar CLI commands (`ollama pull`, `ollama list`, `ollama run`), similar to how Docker manages images.
 * **Automatic hardware detection**: Detects your CPU, RAM, and GPU automatically and selects optimal defaults.
@@ -65,18 +66,21 @@ between ease of use and granular control.
 * **Large ecosystem**: Well-documented with an active community and many supported models listed at [ollama.com/library](https://ollama.com/library).
 
 **Cons:**
+
 * **Less hardware control**: You cannot easily override the number of GPU layers, thread counts, or memory layout without advanced configuration.
 * **Abstraction layer overhead**: Ollama adds a management layer on top of llama.cpp. For most users this is beneficial, but for advanced hardware tuning it can be limiting.
 
-#### llama.cpp
+**llama.cpp**
 
 **Pros:**
+
 * **Granular hardware control**: Expose and tune parameters like `--n-gpu-layers` (how many layers to offload to GPU), `--threads` (CPU thread count), and `--ctx-size` (context window size) to match your exact hardware.
 * **Portable and scriptable**: `llama-server` is a standalone binary that can be embedded in shell scripts, Docker containers, or automation pipelines without a daemon.
 * **Native OpenAI API**: Exposes the standard `/v1/chat/completions` endpoint directly, making it compatible with any OpenAI-compatible client.
 * **Widest quantization support**: Supports every quantization format (`Q2_K`, `Q4_K_M`, `Q8_0`, `IQ3_M` etc.), giving full control over the size vs. quality trade-off.
 
 **Cons:**
+
 * **No built-in model registry**: You must manually find, download, and organize `.gguf` model files from sources like Hugging Face.
 * **No model management**: No built-in equivalent of `ollama list` or `ollama pull`. You manage model files and versions yourself.
 * **Manual startup**: Requires a precise launch command each time (`--model`, `--port`, `--ctx-size`, etc.), with no automatic restart on failure.
