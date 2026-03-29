@@ -26,8 +26,10 @@ LLMs
 Models
 
 * [Llama](https://ollama.com/library/llama3.1)
-* [Qwen](https://ollama.com/library/qwen2.5),
+* [Qwen](https://ollama.com/library/qwen2.5)
 * [Kimi](https://ollama.com/library/kimi-k2)
+* [mistral](https://huggingface.co/mistralai/Mistral-7B-v0.3)
+* [mixtral](https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1)
 
 See [doc/LOCAL_LLM.md](doc/LOCAL_LLM.md) for installation and configuration instructions.
 
