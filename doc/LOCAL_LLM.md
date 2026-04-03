@@ -27,6 +27,7 @@ The model must support **tool calling** (function calling) to work with pgmoneta
 | Model | Size | RAM Needed | Ollama | RamaLama | llama.cpp | vLLM | Notes |
 | :---- | :--- | :--------- | :----- | :------- | :-------- | :--- | :---- |
 | `granite-code` | ~5.0 GB | ~8 GB | Yes | Yes | Yes (GGUF) | Yes | **Recommended**. Built for coding and tool-calling |
+| `gemma4:9b` | ~6.2 GB | ~10 GB | Yes | Yes | Yes (GGUF) | Yes | **Apache 2.0**. Excellent tool-calling and reasoning |
 | `llama3.1:8b` | ~4.7 GB | ~8 GB | Yes | Yes | Yes (GGUF) | Yes | Best balance of capability and size |
 | `llama3.2:3b` | ~2.0 GB | ~4 GB | Yes | Yes | Yes (GGUF) | Yes | Lightweight option for limited hardware |
 | `qwen2.5:7b` | ~4.7 GB | ~8 GB | Yes | Yes | Yes (GGUF) | Yes | Excellent tool calling capabilities |
