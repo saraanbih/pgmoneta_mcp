@@ -7,6 +7,10 @@ mod common;
 #[ignore = "requires pgmoneta stack (see test/check.sh and full-test CI job)"]
 async fn list_backup_test() {
     common::init_config();
+    let _guard = common::backup_fixture_lock().await;
+    common::ensure_backup("primary")
+        .await
+        .expect("backup fixture should be created");
 
     let handler = PgmonetaHandler::new();
     let info_request = ListBackupsRequest {

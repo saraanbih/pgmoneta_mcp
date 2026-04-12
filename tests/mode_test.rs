@@ -20,6 +20,27 @@ use serde_json::Value;
 
 mod common;
 
+fn assert_command_and_status(response: &str, json: &Value, expected_command: &str) {
+    let header = json
+        .get("Header")
+        .unwrap_or_else(|| panic!("Header field missing in response: {response}"));
+    let command = header
+        .get("Command")
+        .unwrap_or_else(|| panic!("Command field missing in Header: {response}"));
+    assert_eq!(
+        command, expected_command,
+        "unexpected command in response: {response}"
+    );
+
+    let outcome = json
+        .get("Outcome")
+        .unwrap_or_else(|| panic!("Outcome field missing in response: {response}"));
+    let status = outcome
+        .get("Status")
+        .unwrap_or_else(|| panic!("Status field missing in Outcome: {response}"));
+    assert_eq!(status, true, "unexpected status in response: {response}");
+}
+
 #[tokio::test]
 #[ignore = "requires pgmoneta stack (see test/check.sh and full-test CI job)"]
 async fn set_mode_online_test() {
@@ -37,16 +58,7 @@ async fn set_mode_online_test() {
         .expect("set_mode should succeed");
 
     let json: Value = serde_json::from_str(&response).expect("response should be valid json");
-
-    if let Some(outcome) = json.get("Outcome") {
-        if let Some(command) = outcome.get("Command") {
-            assert_eq!(command, "mode");
-        } else {
-            panic!("Command field missing in Outcome");
-        }
-    } else {
-        panic!("Outcome field missing");
-    };
+    assert_command_and_status(&response, &json, "mode");
 }
 
 #[tokio::test]
@@ -66,14 +78,5 @@ async fn set_mode_offline_test() {
         .expect("set_mode should succeed");
 
     let json: Value = serde_json::from_str(&response).expect("response should be valid json");
-
-    if let Some(outcome) = json.get("Outcome") {
-        if let Some(command) = outcome.get("Command") {
-            assert_eq!(command, "mode");
-        } else {
-            panic!("Command field missing in Outcome");
-        }
-    } else {
-        panic!("Outcome field missing");
-    };
+    assert_command_and_status(&response, &json, "mode");
 }

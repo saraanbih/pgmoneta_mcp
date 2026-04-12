@@ -19,14 +19,20 @@ use rmcp::handler::server::router::tool::AsyncTool;
 use serde_json::Value;
 mod common;
 #[tokio::test]
+#[ignore = "requires pgmoneta stack (see test/check.sh and full-test CI job)"]
 async fn verify_test() {
     common::init_config();
+    let _guard = common::backup_fixture_lock().await;
+    let backup_id = common::ensure_backup("primary")
+        .await
+        .expect("backup fixture should be created");
 
     let handler = PgmonetaHandler::new();
     let verify_request = VerifyRequest {
         username: "backup_user".to_string(),
         server: "primary".to_string(),
-        backup_id: "newest".to_string(),
+        backup_id,
+        directory: Some("/tmp".to_string()),
     };
 
     let response = VerifyBackupTool::invoke(&handler, verify_request)
@@ -44,5 +50,15 @@ async fn verify_test() {
         }
     } else {
         panic!("Header field missing");
+    };
+
+    if let Some(outcome) = json.get("Outcome") {
+        if let Some(status) = outcome.get("Status") {
+            assert_eq!(status, true, "unexpected status in response: {response}");
+        } else {
+            panic!("Status field missing in Outcome: {response}");
+        }
+    } else {
+        panic!("Outcome field missing: {response}");
     };
 }

@@ -8,12 +8,16 @@ mod common;
 #[ignore = "requires pgmoneta stack (see test/check.sh and full-test CI job)"]
 async fn info_test() {
     common::init_config();
+    let _guard = common::backup_fixture_lock().await;
+    let backup_id = common::ensure_backup("primary")
+        .await
+        .expect("backup fixture should be created");
 
     let handler = PgmonetaHandler::new();
     let info_request = InfoRequest {
         username: "backup_user".to_string(),
         server: "primary".to_string(),
-        backup_id: "newest".to_string(),
+        backup_id,
     };
 
     let response = GetBackupInfoTool::invoke(&handler, info_request)

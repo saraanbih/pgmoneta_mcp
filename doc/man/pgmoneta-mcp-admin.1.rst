@@ -30,15 +30,6 @@ OPTIONS
 -P, --password PASSWORD
   The password for the user
 
--g, --generate
-  Generate a password
-
--l, --length LENGTH
-  Password length (default: 64)
-
--F, --format FORMAT
-  Output format (text, json)
-
 -h, --help
   Print help
 
@@ -47,9 +38,6 @@ OPTIONS
 
 COMMANDS
 ========
-
-master-key
-  Create or update the master key
 
 user add
   Add a new user to configuration file

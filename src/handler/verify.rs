@@ -28,6 +28,8 @@ pub struct VerifyRequest {
     pub username: String,
     pub server: String,
     pub backup_id: String,
+    #[serde(default)]
+    pub directory: Option<String>,
 }
 
 /// Tool for verifying the integrity of a specific backup.
@@ -46,6 +48,7 @@ impl ToolBase for VerifyBackupTool {
         Some(
             "Verify the integrity of a backup using given backup ID and server name. \
             \"newest\", \"latest\" or \"oldest\" are also accepted as backup identifier. \
+            Optionally provide a target directory; /tmp is used by default. \
             The username has to be one of the pgmoneta admins to be able to access pgmoneta"
                 .into(),
         )
@@ -67,12 +70,15 @@ impl AsyncTool<PgmonetaHandler> for VerifyBackupTool {
         _service: &PgmonetaHandler,
         request: VerifyRequest,
     ) -> Result<String, McpError> {
-        let result: String =
-            PgmonetaClient::request_verify(&request.username, &request.server, &request.backup_id)
-                .await
-                .map_err(|e| {
-                    McpError::internal_error(format!("Failed to verify backup: {:?}", e), None)
-                })?;
+        let directory = request.directory.as_deref().unwrap_or("/tmp");
+        let result: String = PgmonetaClient::request_verify(
+            &request.username,
+            &request.server,
+            &request.backup_id,
+            directory,
+        )
+        .await
+        .map_err(|e| McpError::internal_error(format!("Failed to verify backup: {:?}", e), None))?;
         PgmonetaHandler::generate_call_tool_result_string(&result)
     }
 }

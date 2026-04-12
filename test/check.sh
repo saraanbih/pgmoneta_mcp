@@ -22,6 +22,7 @@ readonly PGMONETA_MASTER_KEY_FILE="$PGMONETA_DIR/master.key"
 readonly MCP_MASTER_KEY_FILE="$PGMONETA_MCP_DIR/master.key"
 readonly TEST_SUITE_DIR_NAME="test-suite"
 readonly TEST_SUITE_DIR="$SCRIPT_DIR/$TEST_SUITE_DIR_NAME"
+readonly TEST_SUITE_IMAGE_HASH_FILE="$SCRIPT_DIR/.test-suite-image.sha256"
 readonly TEST_MASTER_KEY="$TEST_SUITE_DIR/master.key"
 readonly CONF_FILES="$TEST_SUITE_DIR/conf"
 readonly BIN_DIR="$TEST_SUITE_DIR/usr/bin"
@@ -31,11 +32,17 @@ readonly MANAGEMENT_PORT=5002
 readonly PGMONETA_PORT_ONE=5001
 readonly PGMONETA_PORT_TWO=9100
 readonly POSTGRESQL_PORT=5432
+readonly COMPRESS_FIXTURE_FILE="/tmp/pgmoneta-mcp-compress-fixture.txt"
+readonly DECOMPRESS_FIXTURE_SOURCE="/tmp/pgmoneta-mcp-decompress-fixture.txt"
+readonly DECOMPRESS_FIXTURE_ARCHIVE="/tmp/pgmoneta-mcp-decompress-fixture.txt.zstd"
+readonly ENCRYPT_FIXTURE_FILE="/tmp/pgmoneta-mcp-encrypt-fixture.txt"
+readonly DECRYPT_FIXTURE_FILE="/tmp/pgmoneta-mcp-decrypt-fixture.txt"
 
 MASTER_KEY_PATH=
 IMAGE_REF=
 RUN_REPLACE_FLAG=
 GENERATE_NEW_IMAGE=false
+TEST_SUITE_IMAGE_CHANGED=false
 POSTGRES_PID=
 PGMONETA_PID=
 
@@ -85,7 +92,12 @@ start_container() {
 }
 
 start_composed_container() {
+    if [[ "$TEST_SUITE_IMAGE_CHANGED" == true ]]; then
+        local container_engine="$(get_container_engine)"
+        $container_engine rm -f "$CONTAINER_NAME" 2>/dev/null || true
+    fi
     if check_container_exists; then
+        prepare_compression_fixtures_container
         return 0
     fi
     echo "Starting composed container for testing..."
@@ -97,17 +109,41 @@ start_composed_container() {
     start_container
     cd "$SCRIPT_DIR"
     wait_for_pgmoneta_startup
+    prepare_compression_fixtures_container
 }
 
 build_composed_image() {
     get_image_name
     local container_engine="$(get_container_engine)"
+    local current_hash=""
+    local previous_hash=""
+
+    current_hash="$(
+        find "$TEST_SUITE_DIR" -type f ! -name "$(basename "$TEST_SUITE_IMAGE_HASH_FILE")" -print0 \
+            | sort -z \
+            | xargs -0 sha256sum \
+            | sha256sum \
+            | awk '{print $1}'
+    )"
+
+    if [[ -f "$TEST_SUITE_IMAGE_HASH_FILE" ]]; then
+        previous_hash="$(cat "$TEST_SUITE_IMAGE_HASH_FILE")"
+    fi
+
     ## check if image name exists, if yes skip build
-    if [[ "$GENERATE_NEW_IMAGE" == false ]] && $container_engine images --format "{{.Repository}}" 2>/dev/null | grep -q "$IMAGE_REF"; then
+    if [[ "$GENERATE_NEW_IMAGE" == false ]] \
+        && [[ "$current_hash" == "$previous_hash" ]] \
+        && $container_engine images --format "{{.Repository}}" 2>/dev/null | grep -q "$IMAGE_REF"; then
         echo "Image '$IMAGE_REF' already exists. Skipping build."
+        TEST_SUITE_IMAGE_CHANGED=false
         return 0
     fi
+    if [[ "$current_hash" != "$previous_hash" ]]; then
+        echo "Test suite sources changed. Rebuilding image '$IMAGE_REF'."
+    fi
     $container_engine build --no-cache -t "$IMAGE_REF" .
+    printf '%s\n' "$current_hash" > "$TEST_SUITE_IMAGE_HASH_FILE"
+    TEST_SUITE_IMAGE_CHANGED=true
 }
 
 clean_composed_image() {
@@ -129,12 +165,9 @@ check_container_exists() {
             echo "Container is already running. Skipping start."
             return 0
         else
-            echo "Container exists but is stopped. Starting it..."
-            cd "$TEST_SUITE_DIR"
-            $container_engine start "$container_name"
-            cd "$SCRIPT_DIR"
-            wait_for_pgmoneta_startup
-            return 0
+            echo "Container exists but is stopped. Removing it for a fresh test environment..."
+            $container_engine rm -f "$container_name" >/dev/null 2>&1 || true
+            return 1
         fi
     fi
     return 1
@@ -480,6 +513,42 @@ ci_setup() {
     sed -i 's/^log_level = .*/log_level = debug/' /tmp/pgmoneta.conf || true
     ci_run_postgresql
     ci_run_pgmoneta
+    prepare_compression_fixtures_local
+}
+
+prepare_compression_fixtures_local() {
+    printf 'pgmoneta MCP compression fixture\n' > "$COMPRESS_FIXTURE_FILE"
+    chmod 644 "$COMPRESS_FIXTURE_FILE"
+
+    printf 'pgmoneta MCP decompression fixture\n' > "$DECOMPRESS_FIXTURE_SOURCE"
+    zstd -q -f "$DECOMPRESS_FIXTURE_SOURCE" -o "$DECOMPRESS_FIXTURE_ARCHIVE"
+    rm -f "$DECOMPRESS_FIXTURE_SOURCE"
+    chmod 644 "$DECOMPRESS_FIXTURE_ARCHIVE"
+
+    printf 'pgmoneta MCP encryption fixture\n' > "$ENCRYPT_FIXTURE_FILE"
+    chmod 644 "$ENCRYPT_FIXTURE_FILE"
+    printf 'pgmoneta MCP decryption fixture\n' > "$DECRYPT_FIXTURE_FILE"
+    chmod 644 "$DECRYPT_FIXTURE_FILE"
+}
+
+prepare_compression_fixtures_container() {
+    local container_engine="$(get_container_engine)"
+    $container_engine exec "$CONTAINER_NAME" /bin/bash -lc "\
+        printf 'pgmoneta MCP compression fixture\n' > '$COMPRESS_FIXTURE_FILE' && \
+        chmod 644 '$COMPRESS_FIXTURE_FILE' && \
+        printf 'pgmoneta MCP decompression fixture\n' > '$DECOMPRESS_FIXTURE_SOURCE' && \
+        zstd -q -f '$DECOMPRESS_FIXTURE_SOURCE' -o '$DECOMPRESS_FIXTURE_ARCHIVE' && \
+        rm -f '$DECOMPRESS_FIXTURE_SOURCE' && \
+        chmod 644 '$DECOMPRESS_FIXTURE_ARCHIVE' && \
+        printf 'pgmoneta MCP encryption fixture\n' > '$ENCRYPT_FIXTURE_FILE' && \
+        chmod 644 '$ENCRYPT_FIXTURE_FILE' && \
+        printf 'pgmoneta MCP decryption fixture\n' > '$DECRYPT_FIXTURE_FILE' && \
+        chmod 644 '$DECRYPT_FIXTURE_FILE' && \
+        chown pgmoneta:pgmoneta \
+            '$COMPRESS_FIXTURE_FILE' \
+            '$DECOMPRESS_FIXTURE_ARCHIVE' \
+            '$ENCRYPT_FIXTURE_FILE' \
+            '$DECRYPT_FIXTURE_FILE'"
 }
 
 ci_dump_logs() {

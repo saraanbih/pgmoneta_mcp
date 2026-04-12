@@ -22,6 +22,10 @@ use serde_json::Value;
 
 mod common;
 
+const ENCRYPT_FIXTURE_PATH: &str = "/tmp/pgmoneta-mcp-encrypt-fixture.txt";
+const DECRYPT_FIXTURE_SOURCE: &str = "/tmp/pgmoneta-mcp-decrypt-fixture.txt";
+const DECRYPT_FIXTURE_ARCHIVE: &str = "/tmp/pgmoneta-mcp-decrypt-fixture.txt.aes";
+
 #[tokio::test]
 #[ignore = "requires pgmoneta stack (see test/check.sh and full-test CI job)"]
 async fn encrypt_file_test() {
@@ -30,7 +34,7 @@ async fn encrypt_file_test() {
     let handler = PgmonetaHandler::new();
     let request = EncryptRequest {
         username: "backup_user".to_string(),
-        file_path: "/tmp/test_file.txt".to_string(),
+        file_path: ENCRYPT_FIXTURE_PATH.to_string(),
     };
 
     let response = EncryptFileTool::invoke(&handler, request)
@@ -39,11 +43,21 @@ async fn encrypt_file_test() {
 
     let json: Value = serde_json::from_str(&response).expect("response should be valid json");
 
-    if let Some(outcome) = json.get("Outcome") {
-        if let Some(command) = outcome.get("Command") {
+    if let Some(header) = json.get("Header") {
+        if let Some(command) = header.get("Command") {
             assert_eq!(command, "encrypt");
         } else {
-            panic!("Command field missing in Outcome");
+            panic!("Command field missing in Header");
+        }
+    } else {
+        panic!("Header field missing");
+    };
+
+    if let Some(outcome) = json.get("Outcome") {
+        if let Some(status) = outcome.get("Status") {
+            assert_eq!(status, true);
+        } else {
+            panic!("Status field missing in Outcome");
         }
     } else {
         panic!("Outcome field missing");
@@ -56,9 +70,20 @@ async fn decrypt_file_test() {
     common::init_config();
 
     let handler = PgmonetaHandler::new();
+    let encrypt_request = EncryptRequest {
+        username: "backup_user".to_string(),
+        file_path: DECRYPT_FIXTURE_SOURCE.to_string(),
+    };
+    let encrypt_response = EncryptFileTool::invoke(&handler, encrypt_request)
+        .await
+        .expect("encrypt_file should succeed before decrypt_file");
+    let encrypt_json: Value =
+        serde_json::from_str(&encrypt_response).expect("encrypt response should be valid json");
+    assert_eq!(encrypt_json["Outcome"]["Status"], true);
+
     let request = DecryptRequest {
         username: "backup_user".to_string(),
-        file_path: "/tmp/test_file.txt.aes".to_string(),
+        file_path: DECRYPT_FIXTURE_ARCHIVE.to_string(),
     };
 
     let response = DecryptFileTool::invoke(&handler, request)
@@ -67,11 +92,21 @@ async fn decrypt_file_test() {
 
     let json: Value = serde_json::from_str(&response).expect("response should be valid json");
 
-    if let Some(outcome) = json.get("Outcome") {
-        if let Some(command) = outcome.get("Command") {
+    if let Some(header) = json.get("Header") {
+        if let Some(command) = header.get("Command") {
             assert_eq!(command, "decrypt");
         } else {
-            panic!("Command field missing in Outcome");
+            panic!("Command field missing in Header");
+        }
+    } else {
+        panic!("Header field missing");
+    };
+
+    if let Some(outcome) = json.get("Outcome") {
+        if let Some(status) = outcome.get("Status") {
+            assert_eq!(status, true);
+        } else {
+            panic!("Status field missing in Outcome");
         }
     } else {
         panic!("Outcome field missing");

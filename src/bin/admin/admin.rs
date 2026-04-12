@@ -41,18 +41,6 @@ struct Args {
     #[arg(short = 'P', long)]
     password: Option<String>,
 
-    /// Generate a password
-    #[arg(short = 'g', long)]
-    generate: bool,
-
-    /// Password length (default: 64, ignored when --generate is false)
-    #[arg(short = 'l', long, default_value = "64")]
-    length: usize,
-
-    /// Output format
-    #[arg(short = 'F', long, value_enum, default_value = "text")]
-    format: OutputFormat,
-
     #[command(subcommand)]
     command: Commands,
 }
@@ -76,13 +64,6 @@ enum UserAction {
     Edit,
     /// List all available users
     Ls,
-}
-
-#[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
-pub enum OutputFormat {
-    #[default]
-    Text,
-    Json,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -110,34 +91,26 @@ fn main() -> Result<()> {
                         .user
                         .as_ref()
                         .ok_or_else(|| anyhow!("Missing required argument: -U, --user <USER>"))?;
-                    let password = User::get_or_generate_password(
-                        args.password.as_deref(),
-                        args.generate,
-                        args.length,
-                    )?;
-                    User::add_user(file, user, &password, args.format)?;
+                    let password = User::get_or_generate_password(args.password.as_deref())?;
+                    User::add_user(file, user, &password)?;
                 }
                 UserAction::Del => {
                     let user = args
                         .user
                         .as_ref()
                         .ok_or_else(|| anyhow!("Missing required argument: -U, --user <USER>"))?;
-                    User::remove_user(file, user, args.format)?;
+                    User::remove_user(file, user)?;
                 }
                 UserAction::Edit => {
                     let user = args
                         .user
                         .as_ref()
                         .ok_or_else(|| anyhow!("Missing required argument: -U, --user <USER>"))?;
-                    let password = User::get_or_generate_password(
-                        args.password.as_deref(),
-                        args.generate,
-                        args.length,
-                    )?;
-                    User::edit_user(file, user, &password, args.format)?;
+                    let password = User::get_or_generate_password(args.password.as_deref())?;
+                    User::edit_user(file, user, &password)?;
                 }
                 UserAction::Ls => {
-                    User::list_users(file, args.format)?;
+                    User::list_users(file)?;
                 }
             }
         }
@@ -148,7 +121,7 @@ fn main() -> Result<()> {
 
 struct User;
 impl User {
-    pub fn add_user(file: &str, user: &str, password: &str, format: OutputFormat) -> Result<()> {
+    pub fn add_user(file: &str, user: &str, password: &str) -> Result<()> {
         let path = Path::new(file);
         let sutil = SecurityUtil::new();
         let mut conf: UserConf;
@@ -185,20 +158,17 @@ impl User {
         let conf_str = serde_ini::to_string(&conf)?;
         fs::write(file, &conf_str)?;
 
-        Self::print_response(
-            format,
-            AdminResponse {
-                command: "user add".to_string(),
-                outcome: "success".to_string(),
-                users: Some(vec![user.to_string()]),
-                generated_password: None,
-            },
-        );
+        Self::print_response(AdminResponse {
+            command: "user add".to_string(),
+            outcome: "success".to_string(),
+            users: Some(vec![user.to_string()]),
+            generated_password: None,
+        });
 
         Ok(())
     }
 
-    pub fn remove_user(file: &str, user: &str, format: OutputFormat) -> Result<()> {
+    pub fn remove_user(file: &str, user: &str) -> Result<()> {
         let path = Path::new(file);
 
         if !path.exists() {
@@ -220,20 +190,17 @@ impl User {
         let conf_str = serde_ini::to_string(&conf)?;
         fs::write(file, &conf_str)?;
 
-        Self::print_response(
-            format,
-            AdminResponse {
-                command: "user del".to_string(),
-                outcome: "success".to_string(),
-                users: Some(vec![user.to_string()]),
-                generated_password: None,
-            },
-        );
+        Self::print_response(AdminResponse {
+            command: "user del".to_string(),
+            outcome: "success".to_string(),
+            users: Some(vec![user.to_string()]),
+            generated_password: None,
+        });
 
         Ok(())
     }
 
-    pub fn edit_user(file: &str, user: &str, password: &str, format: OutputFormat) -> Result<()> {
+    pub fn edit_user(file: &str, user: &str, password: &str) -> Result<()> {
         let path = Path::new(file);
         let sutil = SecurityUtil::new();
 
@@ -267,32 +234,26 @@ impl User {
         let conf_str = serde_ini::to_string(&conf)?;
         fs::write(file, &conf_str)?;
 
-        Self::print_response(
-            format,
-            AdminResponse {
-                command: "user edit".to_string(),
-                outcome: "success".to_string(),
-                users: Some(vec![user.to_string()]),
-                generated_password: None,
-            },
-        );
+        Self::print_response(AdminResponse {
+            command: "user edit".to_string(),
+            outcome: "success".to_string(),
+            users: Some(vec![user.to_string()]),
+            generated_password: None,
+        });
 
         Ok(())
     }
 
-    pub fn list_users(file: &str, format: OutputFormat) -> Result<()> {
+    pub fn list_users(file: &str) -> Result<()> {
         let path = Path::new(file);
 
         if !path.exists() {
-            Self::print_response(
-                format,
-                AdminResponse {
-                    command: "user ls".to_string(),
-                    outcome: "success".to_string(),
-                    users: Some(vec![]),
-                    generated_password: None,
-                },
-            );
+            Self::print_response(AdminResponse {
+                command: "user ls".to_string(),
+                outcome: "success".to_string(),
+                users: Some(vec![]),
+                generated_password: None,
+            });
             return Ok(());
         }
 
@@ -303,33 +264,19 @@ impl User {
             .unwrap_or_default();
         users.sort_unstable();
 
-        Self::print_response(
-            format,
-            AdminResponse {
-                command: "user ls".to_string(),
-                outcome: "success".to_string(),
-                users: Some(users),
-                generated_password: None,
-            },
-        );
+        Self::print_response(AdminResponse {
+            command: "user ls".to_string(),
+            outcome: "success".to_string(),
+            users: Some(users),
+            generated_password: None,
+        });
 
         Ok(())
     }
 
-    fn get_or_generate_password(
-        password: Option<&str>,
-        generate: bool,
-        length: usize,
-    ) -> Result<String> {
+    fn get_or_generate_password(password: Option<&str>) -> Result<String> {
         if let Some(pwd) = password {
             return Ok(pwd.to_string());
-        }
-
-        if generate {
-            let sutil = SecurityUtil::new();
-            let generated = sutil.generate_password(length)?;
-            println!("Generated password: {}", generated);
-            return Ok(generated);
         }
 
         let pwd = prompt_password("Password: ")?;
@@ -342,28 +289,19 @@ impl User {
         Ok(pwd)
     }
 
-    fn print_response(format: OutputFormat, response: AdminResponse) {
-        match format {
-            OutputFormat::Json => {
-                if let Ok(json) = serde_json::to_string_pretty(&response) {
-                    println!("{}", json);
-                }
+    fn print_response(response: AdminResponse) {
+        println!("Command: {}", response.command);
+        println!("Outcome: {}", response.outcome);
+        if let Some(users) = &response.users
+            && !users.is_empty()
+        {
+            println!("Users:");
+            for user in users {
+                println!("  - {}", user);
             }
-            OutputFormat::Text => {
-                println!("Command: {}", response.command);
-                println!("Outcome: {}", response.outcome);
-                if let Some(users) = &response.users
-                    && !users.is_empty()
-                {
-                    println!("Users:");
-                    for user in users {
-                        println!("  - {}", user);
-                    }
-                }
-                if let Some(pwd) = &response.generated_password {
-                    println!("Generated password: {}", pwd);
-                }
-            }
+        }
+        if let Some(pwd) = &response.generated_password {
+            println!("Generated password: {}", pwd);
         }
     }
 }
@@ -403,7 +341,7 @@ mod tests {
         }
 
         // Add a user
-        User::add_user(temp_file_str, "test_user", "test_pass", OutputFormat::Text).unwrap();
+        User::add_user(temp_file_str, "test_user", "test_pass").unwrap();
 
         // Verify user was added
         let content_added = fs::read_to_string(&temp_file).unwrap();
@@ -413,7 +351,7 @@ mod tests {
         assert!(!users_added["admins"]["test_user"].is_empty());
 
         // Edit the user
-        User::edit_user(temp_file_str, "test_user", "new_pass", OutputFormat::Text).unwrap();
+        User::edit_user(temp_file_str, "test_user", "new_pass").unwrap();
 
         // Verify user was edited
         let content_edited = fs::read_to_string(&temp_file).unwrap();
@@ -424,7 +362,7 @@ mod tests {
         );
 
         // Remove the user
-        User::remove_user(temp_file_str, "test_user", OutputFormat::Text).unwrap();
+        User::remove_user(temp_file_str, "test_user").unwrap();
 
         // Verify user was removed
         let content_removed = fs::read_to_string(&temp_file).unwrap();
@@ -453,12 +391,11 @@ mod tests {
             fs::remove_file(&temp_file).unwrap();
         }
 
-        User::add_user(temp_file_str, "user1", "pass1", OutputFormat::Text).unwrap();
-        User::add_user(temp_file_str, "user2", "pass2", OutputFormat::Text).unwrap();
+        User::add_user(temp_file_str, "user1", "pass1").unwrap();
+        User::add_user(temp_file_str, "user2", "pass2").unwrap();
 
         // We can't easily capture stdout here, but we can ensure the function runs without error
-        User::list_users(temp_file_str, OutputFormat::Text).unwrap();
-        User::list_users(temp_file_str, OutputFormat::Json).unwrap();
+        User::list_users(temp_file_str).unwrap();
 
         // Clean up after test
         if temp_file.exists() {

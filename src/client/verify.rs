@@ -24,6 +24,8 @@ struct VerifyRequest {
     server: String,
     #[serde(rename = "Backup")]
     backup: String,
+    #[serde(rename = "Directory")]
+    directory: String,
 }
 
 impl PgmonetaClient {
@@ -32,10 +34,12 @@ impl PgmonetaClient {
         username: &str,
         server: &str,
         backup: &str,
+        directory: &str,
     ) -> anyhow::Result<String> {
         let verify_request = VerifyRequest {
             server: server.to_string(),
             backup: backup.to_string(),
+            directory: directory.to_string(),
         };
         Self::forward_request(username, Command::VERIFY, verify_request).await
     }

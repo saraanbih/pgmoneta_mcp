@@ -10,8 +10,7 @@ The security module is defined and implemented in `src/security.rs` and provides
 
 - **AES-256-GCM encryption**: For encrypting passwords and sensitive data at rest
 - **SCRAM-SHA-256 authentication**: For secure authentication with pgmoneta server
-- **Master key management**: Secure storage and loading of encryption keys
-- **Password generation**: Cryptographically secure random password generation
+- **Password generation**: Cryptographically secure password generation
 - **Base64 encoding/decoding**: For encoding binary data in configuration files
 
 ### Architecture
@@ -22,7 +21,6 @@ The security module is defined and implemented in `src/security.rs` and provides
 +--------------------------------------+
 |  Master Key Management               |
 |  - load_master_key()                 |
-|  - write_master_key()                |
 |                                      |
 |  Encryption/Decryption               |
 |  - encrypt_to_base64_string()        |
@@ -35,7 +33,6 @@ The security module is defined and implemented in `src/security.rs` and provides
 |  - SCRAM-SHA-256 handshake           |
 |                                      |
 |  Utilities                           |
-|  - generate_password()               |
 |  - base64_encode()                   |
 |  - base64_decode()                   |
 +--------------------------------------+
@@ -89,33 +86,6 @@ let master_key = security_util.load_master_key()?;
 - Master key file does not exist
 - File permissions are too permissive (automatically corrected)
 - Invalid Base64 encoding
-
-#### write_master_key
-
-**Signature**:
-```rust
-pub fn write_master_key(&self, key: &str, salt: &[u8]) -> anyhow::Result<()>
-```
-
-**Description**: Writes a new master key and salt to the filesystem with secure permissions (two-line format).
-
-**Security features**:
-- Creates parent directory if it doesn't exist
-- Sets file permissions to 0600 on Unix systems (owner read/write only)
-- Base64 encodes the key before writing
-
-**Usage**:
-```rust
-let security_util = SecurityUtil::new();
-let master_key = "my-secret-master-key-32-bytes!";
-security_util.write_master_key(master_key)?;
-```
-
-**Best practices**:
-- Generate master key using cryptographically secure random number generator
-- Use at least 32 bytes (256 bits) for the master key
-- Never hardcode master keys in source code
-- Back up master key securely (losing it means losing access to encrypted passwords)
 
 ### Encryption and Decryption
 
@@ -332,51 +302,6 @@ Length (4 bytes) | Magic (4 bytes) | Parameters (null-terminated strings)
 - `11`: AUTH_SASL_CONTINUE (continue SASL authentication)
 - `12`: AUTH_SASL_FINAL (final SASL message)
 
-### Password Generation
-
-#### generate_password
-
-**Signature**:
-```rust
-pub fn generate_password(&self, length: usize) -> anyhow::Result<String>
-```
-
-**Description**: Generates a cryptographically secure random password of specified length.
-
-**Parameters**:
-- `length`: Desired password length
-
-**Returns**: Random password string
-
-**Character set**:
-- Uppercase letters: A-Z
-- Lowercase letters: a-z
-- Digits: 0-9
-- Special characters: `!@$%^&*()-_=+[{]}\|:'",<.>/?`
-
-**Usage**:
-```rust
-let security_util = SecurityUtil::new();
-
-// Generate 64-character password
-let password = security_util.generate_password(64)?;
-println!("Generated password: {}", password);
-
-// Generate 32-character password
-let short_password = security_util.generate_password(32)?;
-```
-
-**Security features**:
-- Uses `OsRng` (operating system random number generator)
-- Cryptographically secure randomness
-- Random bytes are zeroed after use
-- Uniform distribution across character set
-
-**Best practices**:
-- Use at least 32 characters for admin passwords
-- Use 64 characters for master keys
-- Store generated passwords securely (password manager)
-
 ### Base64 Encoding
 
 #### base64_encode
@@ -442,8 +367,6 @@ sensitive_data.zeroize(); // Explicitly zero the data
 
 #### Master Key Management
 
-1. **Generation**: Use `generate_password(32)` or better to create master key
-2. **Storage**: Store in `~/.pgmoneta-mcp/master.key` with 0600 permissions
 3. **Backup**: Keep secure offline backup of master key
 4. **Rotation**: Rotate master key periodically and re-encrypt all passwords
 5. **Never commit**: Never commit master key to version control
@@ -500,7 +423,7 @@ fn test_encrypt_decrypt() {
     let sutil = SecurityUtil::new();
     let master_key = "test_master_key_!@#$~<>?/".as_bytes();
     let text = "test_text_123_!@#$~<>?/";
-    
+
     let encrypted = sutil
         .encrypt_to_base64_string(text.as_bytes(), master_key)
         .expect("Encryption should succeed");

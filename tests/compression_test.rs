@@ -22,6 +22,9 @@ use serde_json::Value;
 
 mod common;
 
+const COMPRESS_FIXTURE_PATH: &str = "/tmp/pgmoneta-mcp-compress-fixture.txt";
+const DECOMPRESS_FIXTURE_PATH: &str = "/tmp/pgmoneta-mcp-decompress-fixture.txt.zstd";
+
 #[tokio::test]
 #[ignore = "requires pgmoneta stack (see test/check.sh and full-test CI job)"]
 async fn compress_file_test() {
@@ -30,7 +33,7 @@ async fn compress_file_test() {
     let handler = PgmonetaHandler::new();
     let request = CompressRequest {
         username: "backup_user".to_string(),
-        file_path: "/tmp/test_file.txt".to_string(),
+        file_path: COMPRESS_FIXTURE_PATH.to_string(),
     };
 
     let response = CompressFileTool::invoke(&handler, request)
@@ -39,11 +42,21 @@ async fn compress_file_test() {
 
     let json: Value = serde_json::from_str(&response).expect("response should be valid json");
 
-    if let Some(outcome) = json.get("Outcome") {
-        if let Some(command) = outcome.get("Command") {
+    if let Some(header) = json.get("Header") {
+        if let Some(command) = header.get("Command") {
             assert_eq!(command, "compress");
         } else {
-            panic!("Command field missing in Outcome");
+            panic!("Command field missing in Header");
+        }
+    } else {
+        panic!("Header field missing");
+    };
+
+    if let Some(outcome) = json.get("Outcome") {
+        if let Some(status) = outcome.get("Status") {
+            assert_eq!(status, true);
+        } else {
+            panic!("Status field missing in Outcome");
         }
     } else {
         panic!("Outcome field missing");
@@ -58,7 +71,7 @@ async fn decompress_file_test() {
     let handler = PgmonetaHandler::new();
     let request = DecompressRequest {
         username: "backup_user".to_string(),
-        file_path: "/tmp/test_file.txt.zstd".to_string(),
+        file_path: DECOMPRESS_FIXTURE_PATH.to_string(),
     };
 
     let response = DecompressFileTool::invoke(&handler, request)
@@ -67,11 +80,21 @@ async fn decompress_file_test() {
 
     let json: Value = serde_json::from_str(&response).expect("response should be valid json");
 
-    if let Some(outcome) = json.get("Outcome") {
-        if let Some(command) = outcome.get("Command") {
+    if let Some(header) = json.get("Header") {
+        if let Some(command) = header.get("Command") {
             assert_eq!(command, "decompress");
         } else {
-            panic!("Command field missing in Outcome");
+            panic!("Command field missing in Header");
+        }
+    } else {
+        panic!("Header field missing");
+    };
+
+    if let Some(outcome) = json.get("Outcome") {
+        if let Some(status) = outcome.get("Status") {
+            assert_eq!(status, true);
+        } else {
+            panic!("Status field missing in Outcome");
         }
     } else {
         panic!("Outcome field missing");

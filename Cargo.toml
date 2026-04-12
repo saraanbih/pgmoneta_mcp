@@ -71,7 +71,7 @@ syslog-tracing = "0.3.1"
 reqwest = { version = "0.13.2", default-features = false, features = ["json", "rustls"] }
 inquire = "0.9.4"
 treelog = { version = "0.0.6", features = ["arbitrary-json"] }
-rustyline = "18.0.0"
+rustyline = "17.0.1"
 [target.'cfg(windows)'.dependencies]
 winlog2 = "0.3.2"
 log = "0.4.29"

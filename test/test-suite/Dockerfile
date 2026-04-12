@@ -53,7 +53,7 @@ RUN if ! curl --retry 3 --retry-all-errors --connect-timeout 2 -fsSL -o /tmp/epe
  && dnf install -y 'dnf-command(config-manager)' \
  && dnf config-manager --set-enabled crb \
  && dnf -y update \
- && dnf -y install wget tar crontabs git gcc make cmake openssl-devel systemd-devel zlib-devel bzip2-devel libarchive-devel libssh-devel libatomic python3-docutils \
+ && dnf -y install wget tar crontabs git gcc make cmake openssl-devel systemd-devel zlib-devel bzip2-devel libarchive-devel libssh-devel libatomic python3-docutils zstd \
  && (dnf -y install ncurses-devel || dnf -y install libncurses-devel) \
  && dnf -y install postgresql18 postgresql18-server postgresql18-contrib postgresql18-libs \
  && (dnf -y install zstd-devel || dnf -y install libzstd-devel) \
