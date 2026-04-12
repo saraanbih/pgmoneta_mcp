@@ -56,12 +56,10 @@ Requests to back up a server, such as `Backup primary server`, should call the `
 const HELP_TEXT: &str = "\
 Basic usage:
   /help                 Show this help
-  /user                 Switch to user mode (default)
-  /developer            Switch to developer mode
+  /user                 User mode (default). Accept natural-language requests
+  /developer            Developer mode. Accept <tool-name> {JSON} input and print full JSON responses
   /tools                List available MCP tools
   /exit or /quit        Exit the client
-  user mode             Accept natural-language requests
-  developer mode        Accept <tool-name> {JSON} input and print full JSON responses
 
 The client injects `username` from the users file automatically and derives the
 tool `server` argument from the configured MCP endpoint host. If other arguments
@@ -79,12 +77,7 @@ human-readable translation used in user mode.
 
 The input line supports readline-style history and editing shortcuts such as
 arrow history navigation, Home/End, Ctrl+A/E, Ctrl+B/F, Ctrl+R, and Ctrl+U/K.
-Command history is persisted in ~/.pgmoneta-mcp/pgmoneta-mcp-client.history.
-
-Examples:
-  info
-  get_backup_info {\"backup_id\": \"latest\"}
-  Backup primary server";
+Command history is persisted in ~/.pgmoneta-mcp/pgmoneta-mcp-client.history.";
 
 #[derive(Debug, Parser)]
 #[command(
@@ -1121,7 +1114,7 @@ fn format_tools(tools: &[Tool]) -> String {
         let description = tool
             .description
             .as_ref()
-            .map(|desc| desc.to_string())
+            .map(|desc| sanitize_tool_description(desc))
             .filter(|desc| !desc.trim().is_empty())
             .unwrap_or_else(|| "No description available.".to_string());
         lines.push(format!(
@@ -1135,12 +1128,33 @@ fn format_tools(tools: &[Tool]) -> String {
     lines.join("\n")
 }
 
+fn sanitize_tool_description(description: &str) -> String {
+    description
+        .replace(
+            " The username has to be one of the pgmoneta admins to be able to access pgmoneta.",
+            "",
+        )
+        .replace(
+            " The username has to be one of the pgmoneta admins to be able to perform this action.",
+            "",
+        )
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn format_tool_arguments(schema: &serde_json::Map<String, Value>) -> String {
     let Some(properties) = schema.get("properties").and_then(Value::as_object) else {
         return String::new();
     };
 
-    if properties.is_empty() {
+    let visible_properties: Vec<String> = properties
+        .keys()
+        .filter(|name| name.as_str() != "username")
+        .cloned()
+        .collect();
+
+    if visible_properties.is_empty() {
         return String::new();
     }
 
@@ -1153,7 +1167,7 @@ fn format_tool_arguments(schema: &serde_json::Map<String, Value>) -> String {
         .map(ToOwned::to_owned)
         .collect();
 
-    let mut names: Vec<String> = properties.keys().cloned().collect();
+    let mut names: Vec<String> = visible_properties;
     names.sort();
 
     let args = names
@@ -1558,13 +1572,30 @@ mod tests {
         let schema = serde_json::from_value(json!({
             "properties": {
                 "backup": { "type": "string" },
-                "server": { "type": "string" }
+                "server": { "type": "string" },
+                "username": { "type": "string" }
             },
-            "required": ["server"]
+            "required": ["server", "username"]
         }))
         .unwrap();
 
         assert_eq!(format_tool_arguments(&schema), "(backup?, server)");
+    }
+
+    #[test]
+    fn test_sanitize_tool_description_removes_username_boilerplate() {
+        assert_eq!(
+            sanitize_tool_description(
+                "Create a full backup of a server. Requires a server name. The username has to be one of the pgmoneta admins to be able to access pgmoneta."
+            ),
+            "Create a full backup of a server. Requires a server name."
+        );
+        assert_eq!(
+            sanitize_tool_description(
+                "Shutdown the pgmoneta server. The username has to be one of the pgmoneta admins to be able to perform this action. Note: After pgmoneta is shut down, subsequent backup-related tool calls will fail until pgmoneta is restarted."
+            ),
+            "Shutdown the pgmoneta server. Note: After pgmoneta is shut down, subsequent backup-related tool calls will fail until pgmoneta is restarted."
+        );
     }
 
     #[test]
