@@ -86,8 +86,7 @@ mod tests {
 
     #[test]
     fn test_handler_has_backup_tool() {
-        let handler = PgmonetaHandler::new();
-        let tools = handler.tool_router.list_all();
+        let tools = PgmonetaHandler::tool_router().list_all();
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
         assert!(
             tool_names.contains(&"backup_server"),

@@ -86,13 +86,78 @@ impl AsyncTool<PgmonetaHandler> for VerifyBackupTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::handler::PgmonetaHandler;
     use rmcp::handler::server::router::tool::ToolBase;
+    use serde_json::{Map, Value, json};
 
     #[test]
     fn test_verify_backup_tool_metadata() {
         assert_eq!(VerifyBackupTool::name(), "verify_backup");
         let desc = VerifyBackupTool::description();
         assert!(desc.is_some());
-        assert!(desc.unwrap().contains("Verify"));
+        let desc = desc.unwrap();
+        assert!(desc.contains("Verify"));
+        assert!(desc.contains("/tmp"));
+    }
+
+    #[test]
+    fn test_handler_has_verify_tool() {
+        let tools = PgmonetaHandler::tool_router().list_all();
+        let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
+        assert!(
+            tool_names.contains(&"verify_backup"),
+            "verify_backup tool should be registered, found: {:?}",
+            tool_names
+        );
+    }
+
+    #[test]
+    fn test_verify_request_directory_defaults_to_none_on_deserialize() {
+        let request: VerifyRequest = serde_json::from_value(json!({
+            "username": "alice",
+            "server": "main",
+            "backup_id": "latest"
+        }))
+        .unwrap();
+
+        assert_eq!(request.username, "alice");
+        assert_eq!(request.server, "main");
+        assert_eq!(request.backup_id, "latest");
+        assert_eq!(request.directory, None);
+    }
+
+    #[test]
+    fn test_verify_request_deserializes_explicit_directory() {
+        let request: VerifyRequest = serde_json::from_value(json!({
+            "username": "alice",
+            "server": "main",
+            "backup_id": "latest",
+            "directory": "/var/tmp/verify"
+        }))
+        .unwrap();
+
+        assert_eq!(request.directory.as_deref(), Some("/var/tmp/verify"));
+    }
+
+    #[test]
+    fn test_generate_call_tool_result_string_verify() {
+        let response = r#"{"Outcome": {"Status": true, "Command": 19}}"#;
+        let result = PgmonetaHandler::generate_call_tool_result_string(response);
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        let parsed: Map<String, Value> = serde_json::from_str(&output).unwrap();
+        let outcome = parsed["Outcome"].as_object().unwrap();
+        assert_eq!(outcome["Command"], "verify");
+    }
+
+    #[test]
+    fn test_verify_response_with_error() {
+        let response = r#"{"Outcome": {"Status": false, "Command": 19, "Error": 805}}"#;
+        let result = PgmonetaHandler::generate_call_tool_result_string(response);
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        let parsed: Map<String, Value> = serde_json::from_str(&output).unwrap();
+        let outcome = parsed["Outcome"].as_object().unwrap();
+        assert_eq!(outcome["Error"], "Verify: network error");
     }
 }
