@@ -147,18 +147,21 @@ pub struct ClientConfiguration {
     /// Connection timeout in seconds. Default: 30.
     #[serde(default = "default_timeout")]
     pub timeout: u64,
+    /// Default named LLM profile for natural-language requests.
+    #[serde(default)]
+    pub model: String,
 }
 
 /// Root configuration for the interactive MCP client.
 ///
-/// This includes the required `[pgmoneta_mcp_client]` section and the optional `[llm]`
-/// section, which follows the same format as the server configuration.
+/// This includes the required `[pgmoneta_mcp_client]` section and any number of
+/// named LLM profile sections that follow the shared LLM configuration format.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ClientAppConfiguration {
     /// Configuration for the interactive MCP client.
     pub client: ClientConfiguration,
-    /// Optional LLM configuration shared with the server config format.
-    pub llm: Option<LlmConfiguration>,
+    /// Named LLM profiles keyed by section name in the client configuration file.
+    pub llms: HashMap<String, LlmConfiguration>,
 }
 
 #[derive(Deserialize)]
@@ -170,7 +173,8 @@ struct InspectorConfRoot {
 struct ClientConfRoot {
     #[serde(rename = "pgmoneta_mcp_client")]
     pub client: ClientConfiguration,
-    pub llm: Option<LlmConfiguration>,
+    #[serde(flatten)]
+    pub llms: HashMap<String, HashMap<String, String>>,
 }
 
 /// Loads the main configuration and user configuration from the specified file paths.
@@ -271,7 +275,7 @@ pub fn load_client_configuration(client_path: &str) -> anyhow::Result<ClientAppC
     })?;
     normalize_client_configuration(ClientAppConfiguration {
         client: root.client,
-        llm: root.llm,
+        llms: parse_client_llm_profiles(root.llms)?,
     })
 }
 
@@ -318,8 +322,37 @@ fn normalize_configuration(mut conf: Configuration) -> anyhow::Result<Configurat
 fn normalize_client_configuration(
     mut conf: ClientAppConfiguration,
 ) -> anyhow::Result<ClientAppConfiguration> {
-    if let Some(llm) = conf.llm.as_mut() {
+    conf.client.model = conf.client.model.trim().to_string();
+
+    for llm in conf.llms.values_mut() {
         normalize_llm_configuration(llm)?;
+    }
+
+    if conf.llms.is_empty() {
+        conf.client.model.clear();
+        return Ok(conf);
+    }
+
+    if conf.client.model.is_empty() {
+        if conf.llms.len() == 1 {
+            conf.client.model = conf
+                .llms
+                .keys()
+                .next()
+                .cloned()
+                .ok_or_else(|| anyhow!("Missing LLM model definition"))?;
+        } else {
+            return Err(anyhow!(
+                "Client configuration must define [pgmoneta_mcp_client].model when multiple LLM profiles are configured"
+            ));
+        }
+    }
+
+    if !conf.llms.contains_key(&conf.client.model) {
+        return Err(anyhow!(
+            "Client model '{}' is not defined in the client configuration",
+            conf.client.model
+        ));
     }
 
     Ok(conf)
@@ -343,6 +376,40 @@ fn normalize_llm_configuration(llm: &mut LlmConfiguration) -> anyhow::Result<()>
     }
 
     validate_llm_provider(&llm.provider)
+}
+
+fn parse_client_llm_profiles(
+    sections: HashMap<String, HashMap<String, String>>,
+) -> anyhow::Result<HashMap<String, LlmConfiguration>> {
+    sections
+        .into_iter()
+        .map(|(name, values)| {
+            let provider = values.get("provider").cloned().unwrap_or_default();
+            let endpoint = values.get("endpoint").cloned().unwrap_or_default();
+            let model = values.get("model").cloned().unwrap_or_default();
+            let max_tool_rounds = match values.get("max_tool_rounds") {
+                Some(value) => value.trim().parse::<usize>().map_err(|e| {
+                    anyhow!(
+                        "Invalid max_tool_rounds '{}' for client LLM profile '{}': {}",
+                        value,
+                        name,
+                        e
+                    )
+                })?,
+                None => default_llm_max_tool_rounds(),
+            };
+
+            Ok((
+                name,
+                LlmConfiguration {
+                    provider,
+                    endpoint,
+                    model,
+                    max_tool_rounds,
+                },
+            ))
+        })
+        .collect()
 }
 
 fn validate_llm_provider(provider: &str) -> anyhow::Result<()> {
@@ -382,8 +449,9 @@ mod tests {
 
         assert_eq!(conf.client.url, "http://localhost:8000/mcp");
         assert_eq!(conf.client.timeout, 15);
+        assert_eq!(conf.client.model, "llm");
 
-        let llm = conf.llm.unwrap();
+        let llm = conf.llms.get("llm").unwrap();
         assert_eq!(llm.provider, "ollama");
         assert_eq!(llm.endpoint, "http://localhost:11434");
         assert_eq!(llm.model, "qwen2.5:3b");
@@ -403,6 +471,40 @@ mod tests {
 
         assert_eq!(conf.client.url, "http://localhost:8000/mcp");
         assert_eq!(conf.client.timeout, 30);
-        assert!(conf.llm.is_none());
+        assert!(conf.client.model.is_empty());
+        assert!(conf.llms.is_empty());
+    }
+
+    #[test]
+    fn test_load_client_configuration_with_named_llm_profiles() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(
+            file,
+            "[pgmoneta_mcp_client]\nurl = http://localhost:8000/mcp\nmodel = qwen\n\n[qwen]\nprovider = ollama\nendpoint = http://localhost:11434\nmodel = qwen2.5:7b\n\n[gemma]\nprovider = llama.cpp\nendpoint = http://localhost:8100/v1\nmodel = ggml-org/gemma-3-4b-it-GGUF\n"
+        )
+        .unwrap();
+
+        let conf = load_client_configuration(file.path().to_str().unwrap()).unwrap();
+
+        assert_eq!(conf.client.model, "qwen");
+        assert_eq!(conf.llms.len(), 2);
+        assert_eq!(conf.llms.get("qwen").unwrap().provider, "ollama");
+        assert_eq!(conf.llms.get("gemma").unwrap().provider, "llama.cpp");
+    }
+
+    #[test]
+    fn test_load_client_configuration_requires_default_model_for_multiple_profiles() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(
+            file,
+            "[pgmoneta_mcp_client]\nurl = http://localhost:8000/mcp\n\n[qwen]\nprovider = ollama\nendpoint = http://localhost:11434\nmodel = qwen2.5:7b\n\n[gemma]\nprovider = llama.cpp\nendpoint = http://localhost:8100/v1\nmodel = ggml-org/gemma-3-4b-it-GGUF\n"
+        )
+        .unwrap();
+
+        let err = load_client_configuration(file.path().to_str().unwrap()).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("must define [pgmoneta_mcp_client].model")
+        );
     }
 }

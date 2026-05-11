@@ -60,7 +60,9 @@ HF_HOME=/mnt/ai/huggingface python -m vllm.entrypoints.openai.api_server \
   --tensor-parallel-size 4
 ```
 
-The default endpoint will be `http://localhost:8000`.
+The default endpoint will be `http://localhost:8000`. In pgmoneta MCP
+configuration you can use either `http://localhost:8000` or
+`http://localhost:8000/v1`.
 
 ### Configure pgmoneta_mcp
 
@@ -69,7 +71,7 @@ Add or update the `[llm]` section in `pgmoneta-mcp.conf`:
 ```ini
 [llm]
 provider = vllm
-endpoint = http://localhost:8000
+endpoint = http://localhost:8000/v1
 model = ibm-granite/granite-3.0-8b-instruct
 max_tool_rounds = 10
 ```

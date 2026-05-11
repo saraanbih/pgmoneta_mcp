@@ -10,7 +10,8 @@ This guide covers:
 
 * Installing Ollama, RamaLama, llama.cpp, or vLLM
 * Downloading and validating a model
-* Configuring the `[llm]` section in `pgmoneta-mcp.conf` / `pgmoneta-mcp-client.conf`
+* Configuring the `[llm]` section in `pgmoneta-mcp.conf`
+* Configuring one or more named LLM profiles in `pgmoneta-mcp-client.conf`
 
 ## Selecting a model
 
@@ -50,11 +51,18 @@ The MCP client is called `pgmoneta-mcp-client`, and its configuration in `pgmone
 ```ini
 [pgmoneta_mcp_client]
 url = http://localhost:8000/mcp
+model = qwen
 
-[llm]
+[qwen]
 provider = ramalama
 endpoint = http://localhost:8080
 model = qwen2.5vl:7b
+max_tool_rounds = 10
+
+[gemma]
+provider = llama.cpp
+endpoint = http://localhost:8100/v1
+model = ggml-org/gemma-3-4b-it-GGUF
 max_tool_rounds = 10
 ```
 
@@ -63,10 +71,16 @@ for example.
 Start the client by
 
 ```sh
-pgmoneta-mcp-client -c pgmoneta-mcp-client.conf -u pgmoneta-mcp-users.conf
+./pgmoneta-mcp-client -c pgmoneta-mcp-client.conf -u pgmoneta-mcp-users.conf
 ```
 
-to enter its interactive mode.
+to enter its interactive mode. Use `/model` to inspect the active profile and
+`/model [name]` to switch between the configured profiles at runtime. Press Tab
+after `/model ` to complete the available profile names. The client header shows
+the configured MCP URL and active profile, with independent green tick / red
+cross indicators for MCP reachability and active model endpoint reachability.
+Use `/list-models` to print the configured client profiles as an aligned table
+with `Name`, `Model`, and `Provider` columns.
 
 ## Ollama
 
@@ -167,7 +181,7 @@ llama-server --model /mnt/ai/models/Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf --po
 ```ini
 [llm]
 provider = llama.cpp
-endpoint = http://localhost:8080
+endpoint = http://localhost:8080/v1
 model = granite-3.0-8b-instruct-Q4_K_M.gguf
 max_tool_rounds = 10
 ```
@@ -205,14 +219,16 @@ ramalama --store /mnt/ai/ramalama serve granite-code:8b
 ramalama --store /mnt/ai/ramalama serve llama3.1:70b
 ```
 
-The default endpoint is `http://localhost:8080`.
+The default endpoint is `http://localhost:8080`. In pgmoneta MCP configuration
+you can use either `http://localhost:8080` or `http://localhost:8080/v1` for
+OpenAI-compatible providers such as RamaLama.
 
 ### Example
 
 ```ini
 [llm]
 provider = ramalama
-endpoint = http://localhost:8080
+endpoint = http://localhost:8080/v1
 model = granite-code:8b
 max_tool_rounds = 10
 ```
@@ -268,7 +284,7 @@ curl http://localhost:8000/v1/models
 ```ini
 [llm]
 provider = vllm
-endpoint = http://localhost:8000
+endpoint = http://localhost:8000/v1
 model = ibm-granite/granite-3.0-8b-instruct
 max_tool_rounds = 10
 ```
@@ -278,7 +294,7 @@ max_tool_rounds = 10
 | Property | Default | Required | Description |
 | :------- | :------ | :------- | :---------- |
 | provider |  | Yes | The LLM provider backend (`ollama`, `llama.cpp`, `ramalama` or `vllm`) |
-| endpoint |  | Yes | The URL of the LLM inference server |
+| endpoint |  | Yes | The URL of the LLM inference server. For `llama.cpp`, `ramalama`, and `vllm`, either the server root URL or the OpenAI-compatible `/v1` URL can be configured. |
 | model |  | Yes | The model name to use for inference |
 | max_tool_rounds | 10 | No | Maximum tool-calling iterations per user prompt |
 

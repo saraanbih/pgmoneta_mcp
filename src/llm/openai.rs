@@ -31,6 +31,11 @@ pub struct OpenAiClient {
     model: String,
 }
 
+fn normalize_openai_endpoint(endpoint: &str) -> String {
+    let endpoint = endpoint.trim_end_matches('/');
+    endpoint.strip_suffix("/v1").unwrap_or(endpoint).to_string()
+}
+
 /// Request body for OpenAI's `/v1/chat/completions` endpoint.
 #[derive(Debug, Serialize)]
 struct OpenAiChatRequest<'a> {
@@ -120,7 +125,7 @@ impl OpenAiClient {
         Self {
             http_client: Client::new(),
             provider_name: provider_name.to_string(),
-            endpoint: endpoint.trim_end_matches('/').to_string(),
+            endpoint: normalize_openai_endpoint(endpoint),
             model: model.to_string(),
         }
     }
@@ -371,6 +376,13 @@ mod tests {
     fn test_client_construction() {
         let client = OpenAiClient::new("vllm", "http://localhost:8080/", "my-model");
         assert_eq!(client.endpoint(), "http://localhost:8080");
+        assert_eq!(client.model(), "my-model");
+    }
+
+    #[test]
+    fn test_client_construction_normalizes_v1_suffix() {
+        let client = OpenAiClient::new("vllm", "http://localhost:8100/v1", "my-model");
+        assert_eq!(client.endpoint(), "http://localhost:8100");
         assert_eq!(client.model(), "my-model");
     }
 }

@@ -76,7 +76,9 @@ llama-server \
   --ctx-size 8192
 ```
 
-The default endpoint will be `http://localhost:8080`.
+The default endpoint will be `http://localhost:8080`. In pgmoneta MCP
+configuration you can use either `http://localhost:8080` or
+`http://localhost:8080/v1`.
 
 ### Configure pgmoneta_mcp
 
@@ -85,7 +87,7 @@ Add or update the `[llm]` section in `pgmoneta-mcp.conf`:
 ``` ini
 [llm]
 provider = llama.cpp
-endpoint = http://localhost:8080
+endpoint = http://localhost:8080/v1
 model = granite-3.0-8b-instruct-Q4_K_M
 max_tool_rounds = 10
 ```

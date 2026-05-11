@@ -47,7 +47,7 @@ Add an `[llm]` section to your `pgmoneta-mcp.conf` file to configure the runtime
 | Property | Default | Required | Description |
 | :------- | :------ | :------- | :---------- |
 | provider |  | Yes | The LLM provider backend (`ollama`, `llama.cpp`, `vLLM` or `ramalama`) |
-| endpoint |  | Yes | The URL of the LLM inference server |
+| endpoint |  | Yes | The URL of the LLM inference server. For `llama.cpp`, `ramalama`, and `vLLM`, either the server root URL or the OpenAI-compatible `/v1` URL can be configured. |
 | model |  | Yes | The explicit model name to use for inference |
 | max_tool_rounds | 10 | No | Maximum tool-calling iterations per user prompt |
 

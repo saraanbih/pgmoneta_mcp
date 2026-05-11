@@ -397,11 +397,18 @@ Create `pgmoneta-mcp-client.conf`:
 [pgmoneta_mcp_client]
 url = http://localhost:8000/mcp
 timeout = 30
+model = qwen
 
-[llm]
+[qwen]
 provider = ollama
 endpoint = http://localhost:11434
 model = qwen2.5:3b
+max_tool_rounds = 10
+
+[gemma]
+provider = llama.cpp
+endpoint = http://localhost:8100/v1
+model = ggml-org/gemma-3-4b-it-GGUF
 max_tool_rounds = 10
 ```
 
@@ -413,22 +420,24 @@ Configuration keys:
 |------|----------|-------------|
 | `url` | Yes | Full MCP endpoint URL, including the `/mcp` path |
 | `timeout` | No | Timeout in seconds for connect and tool requests. Default: `30` |
+| `model` | No* | Default named LLM profile used for natural-language requests. Required when more than one LLM profile is configured. |
 
-### `[llm]`
+### `[<llm-name>]`
 
-The optional `[llm]` section uses the same format as `pgmoneta-mcp-server.conf`.
+Each optional named LLM profile section uses the same keys as `pgmoneta-mcp-server.conf`.
+The section name is the profile name exposed by `/model [name]` and Tab completion.
 
 | Key | Required | Description |
 |------|----------|-------------|
 | `provider` | Yes | `ollama`, `llama.cpp`, `ramalama`, or `vllm` |
-| `endpoint` | Yes | Base URL of the LLM server |
+| `endpoint` | Yes | LLM server URL. For `llama.cpp`, `ramalama`, and `vllm`, configure either the server root URL or the OpenAI-compatible `/v1` URL. |
 | `model` | Yes | Model identifier used for tool selection |
 | `max_tool_rounds` | No | Accepted for compatibility with the shared LLM config block. Default: `10` |
 
 Run the interactive client:
 
 ```sh
-pgmoneta-mcp-client -c pgmoneta-mcp-client.conf -u pgmoneta-mcp-users.conf
+./pgmoneta-mcp-client -c pgmoneta-mcp-client.conf -u pgmoneta-mcp-users.conf
 ```
 
 The prompt is derived from the configured endpoint, for example:
@@ -437,10 +446,21 @@ The prompt is derived from the configured endpoint, for example:
 admin@localhost:8000/mcp$ 
 ```
 
+The startup header shows the configured MCP URL and active model profile. The
+MCP line reflects MCP server reachability, while the model line reflects the
+active model endpoint reachability. Each line uses a green tick or red cross
+independently. The header is refreshed after `/connect`, `/disconnect`, and
+`/model [name]`.
+
 Inside the shell:
 
 ```text
+/connect
+/disconnect
+/list-models
 /help
+/model
+/model gemma
 /user
 List backups on primary server
 /developer
@@ -448,13 +468,19 @@ list_backups {"server":"primary"}
 ```
 
 The interactive prompt uses readline-style editing, explicit Home/End line
-navigation, slash-command Tab completion, and history navigation, and persists
-the latest 1000 commands in `~/.pgmoneta-mcp/pgmoneta-mcp-client.history`.
+navigation, slash-command Tab completion, `/model [name]` Tab completion based
+on configured LLM profile names, and history navigation, and persists the latest
+1000 commands in `~/.pgmoneta-mcp/pgmoneta-mcp-client.history`.
 
-The client starts in `/user` mode. When `[llm]` is configured, free-form
-requests are translated into one of the tools from `/tools` using the tool
-schemas returned by the MCP server. This keeps natural-language execution
-aligned with whatever tool set the server currently exposes.
+`/list-models` prints the configured LLM profiles as an aligned table with the
+columns `Name`, `Model`, and `Provider`.
+
+The client starts in `/user` mode. When at least one LLM profile is configured,
+free-form requests are translated into one of the tools from `/tools` using the
+tool schemas returned by the MCP server. `/model` shows the active profile and
+available choices, while `/model [name]` switches the runtime profile without
+restarting the client. This keeps natural-language execution aligned with
+whatever tool set the server currently exposes.
 
 Use `/developer` for direct tool calls with explicit JSON input. Developer mode
 prints the full JSON response and skips the human-readable translation used in

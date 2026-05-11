@@ -45,7 +45,20 @@ const HISTORY_DIR: &str = ".pgmoneta-mcp";
 const HISTORY_FILE: &str = "pgmoneta-mcp-client.history";
 const HISTORY_MAX_ENTRIES: usize = 1000;
 const CLIENT_NAME: &str = "pgmoneta MCP client";
-const SLASH_COMMANDS: &[&str] = &["/developer", "/exit", "/help", "/quit", "/tools", "/user"];
+const MODEL_COMMAND: &str = "/model";
+const MODEL_COMMAND_PREFIX: &str = "/model ";
+const SLASH_COMMANDS: &[&str] = &[
+    "/connect",
+    "/developer",
+    "/disconnect",
+    "/exit",
+    "/help",
+    "/list-models",
+    "/model",
+    "/quit",
+    "/tools",
+    "/user",
+];
 const NATURAL_LANGUAGE_SYSTEM_PROMPT: &str = "\
 You translate user requests into pgmoneta MCP tool invocations. \
 Always select the single best matching tool from the provided tool list and respond with a tool call instead of plain text. \
@@ -56,8 +69,12 @@ Requests to backup a server, such as `Backup primary server` will call the `back
 const HELP_TEXT: &str = "\
 Basic usage:
   /help                 Show this help
+  /connect              Connect to the configured MCP server
+  /disconnect           Disconnect from the configured MCP server
   /user                 User mode (default). Accept natural-language requests
   /developer            Developer mode. Accept <tool-name> {JSON} input and print full JSON responses
+  /list-models          List configured LLM profiles as name, model, and provider
+  /model [name]         Show or switch the active LLM profile for natural-language requests
   /tools                List available MCP tools
   /exit or /quit        Exit the client
 
@@ -65,10 +82,14 @@ The client injects `username` from the users file automatically.
 Required tool arguments such as `server` must be provided explicitly. If any
 required arguments are missing, the client reports them before executing.
 
-When an `[llm]` section is configured in `pgmoneta-mcp-client.conf`, you can
+When one or more LLM profiles are configured in `pgmoneta-mcp-client.conf`, you can
 also enter natural-language requests such as `List backups on primary server`.
 The client asks the LLM to select one of the tools from `/tools` and build the
 matching JSON arguments before executing it.
+
+Use `/model` to show the current LLM profile and `/model <name>` to switch to
+another configured profile. Press Tab after `/model ` to complete the available
+profile names.
 
 Developer mode is intended for direct MCP/tool work. It expects explicit
 `<tool-name> {JSON}` input and prints the full JSON response without the
@@ -101,8 +122,12 @@ struct Args {
 #[derive(Debug, PartialEq)]
 enum ClientCommand {
     Help,
+    Connect,
+    Disconnect,
+    ListModels,
     UserMode,
     DeveloperMode,
+    Model(Option<String>),
     Tools,
     Exit,
     ToolCall {
@@ -126,12 +151,25 @@ enum ClientMode {
 
 type ClientEditor = Editor<ClientHelper, DefaultHistory>;
 
-#[derive(Default)]
-struct ClientHelper;
+struct ClientHelper {
+    llm_names: Vec<String>,
+}
+
+impl ClientHelper {
+    fn new(llm_names: Vec<String>) -> Self {
+        Self { llm_names }
+    }
+}
 
 enum ConfiguredLlm {
     Ollama(OllamaClient),
     OpenAi(OpenAiClient),
+}
+
+struct LlmStatusProbe {
+    model: String,
+    provider: String,
+    endpoint: String,
 }
 
 impl Completer for ClientHelper {
@@ -147,8 +185,22 @@ impl Completer for ClientHelper {
             return Ok((0, Vec::new()));
         };
 
+        if let Some((start, model_prefix)) = model_completion_prefix(prefix) {
+            let mut matches = self
+                .llm_names
+                .iter()
+                .filter(|name| name.starts_with(model_prefix))
+                .map(|name| Pair {
+                    display: name.clone(),
+                    replacement: name.clone(),
+                })
+                .collect::<Vec<_>>();
+            matches.sort_by(|left, right| left.replacement.cmp(&right.replacement));
+            return Ok((start, matches));
+        }
+
         if !is_slash_command_prefix(prefix) {
-            return Ok((0, Vec::new()));
+            return Ok((pos, Vec::new()));
         }
 
         let mut matches = SLASH_COMMANDS
@@ -180,11 +232,28 @@ impl Helper for ClientHelper {}
 fn main() -> Result<()> {
     let args = Args::parse();
     let config = configuration::load_client_configuration(&args.conf)?;
-    let llm = config
-        .llm
-        .as_ref()
-        .map(ConfiguredLlm::from_configuration)
-        .transpose()?;
+    let llm_names = sorted_llm_names(&config.llms);
+    let llm_probes = config
+        .llms
+        .iter()
+        .map(|(name, configuration)| {
+            (
+                name.clone(),
+                LlmStatusProbe {
+                    model: configuration.model.clone(),
+                    provider: configuration.provider.clone(),
+                    endpoint: configuration.endpoint.clone(),
+                },
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let llms = config
+        .llms
+        .iter()
+        .map(|(name, configuration)| {
+            ConfiguredLlm::from_configuration(configuration).map(|client| (name.clone(), client))
+        })
+        .collect::<Result<HashMap<_, _>>>()?;
     let defaults = ClientDefaults {
         server: tool_server_from_endpoint(&config.client.url)?,
         username: select_username(&args.users)?,
@@ -195,51 +264,131 @@ fn main() -> Result<()> {
         &config.client.url,
         config.client.timeout,
     )) {
-        Ok(client) => client,
-        Err(_) => {
-            println!("{}", format_connect_error(&config.client.url));
-            return Ok(());
-        }
+        Ok(client) => Some(client),
+        Err(_) => None,
     };
+    let active_model = default_model_name(&config.client.model).map(ToOwned::to_owned);
+    let model_reachable = runtime.block_on(active_model_reachable(
+        &llm_probes,
+        active_model.as_deref(),
+        config.client.timeout,
+    ));
 
-    println!("{}", startup_banner(env!("CARGO_PKG_VERSION")));
+    println!(
+        "{}",
+        startup_banner(
+            env!("CARGO_PKG_VERSION"),
+            &config.client.url,
+            client.is_some(),
+            active_model.as_deref(),
+            model_reachable,
+        ),
+    );
     println!("• Help: /help");
     println!();
 
-    let result = run_repl(&runtime, &client, &prompt_target, &defaults, llm.as_ref());
-    runtime.block_on(client.cleanup())?;
-    result
+    run_repl(
+        &runtime,
+        client,
+        &config.client.url,
+        config.client.timeout,
+        &prompt_target,
+        &defaults,
+        &llms,
+        &llm_probes,
+        &llm_names,
+        env!("CARGO_PKG_VERSION"),
+        active_model,
+    )
 }
 
 fn format_connect_error(url: &str) -> String {
     format!("No connection to {url}")
 }
 
-fn startup_banner(version: &str) -> String {
-    let title = format!("{CLIENT_NAME} {version}");
-    let width = title.len();
+fn startup_banner(
+    version: &str,
+    client_url: &str,
+    mcp_connected: bool,
+    model: Option<&str>,
+    model_reachable: bool,
+) -> String {
+    let lines = [
+        format!("{CLIENT_NAME} {version}"),
+        format!("MCP: {client_url} {}", connection_marker(mcp_connected)),
+        format!(
+            "Model: {} {}",
+            model_label(model),
+            connection_marker(model_reachable)
+        ),
+    ];
+    let width = lines
+        .iter()
+        .map(|line| visible_width(line))
+        .max()
+        .unwrap_or(0);
     let top_border = format!("┏{}┓", "━".repeat(width + 2));
     let bottom_border = format!("┗{}┛", "━".repeat(width + 2));
 
-    let mut lines = Vec::with_capacity(3);
-    lines.push(top_border);
-    lines.push(format!("┃ {:width$} ┃", title, width = width));
-    lines.push(bottom_border);
-    lines.join("\n")
+    let mut banner = Vec::with_capacity(lines.len() + 2);
+    banner.push(top_border);
+    banner.extend(
+        lines
+            .into_iter()
+            .map(|line| format_banner_line(&line, width)),
+    );
+    banner.push(bottom_border);
+    banner.join("\n")
+}
+
+fn format_banner_line(line: &str, width: usize) -> String {
+    let padding = width.saturating_sub(visible_width(line));
+    format!("┃ {line}{} ┃", " ".repeat(padding))
+}
+
+fn visible_width(text: &str) -> usize {
+    strip_ansi_codes(text).chars().count()
+}
+
+fn strip_ansi_codes(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' && chars.peek() == Some(&'[') {
+            chars.next();
+            for next in chars.by_ref() {
+                if next.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+            continue;
+        }
+        output.push(ch);
+    }
+
+    output
 }
 
 fn run_repl(
     runtime: &Runtime,
-    client: &McpClient,
+    mut client: Option<McpClient>,
+    client_url: &str,
+    client_timeout: u64,
     prompt_target: &str,
     defaults: &ClientDefaults,
-    llm: Option<&ConfiguredLlm>,
+    llms: &HashMap<String, ConfiguredLlm>,
+    llm_probes: &HashMap<String, LlmStatusProbe>,
+    llm_names: &[String],
+    version: &str,
+    mut active_model: Option<String>,
 ) -> Result<()> {
     let mut editor = ClientEditor::new().context("Failed to initialize line editor")?;
-    editor.set_helper(Some(ClientHelper));
+    editor.set_helper(Some(ClientHelper::new(llm_names.to_vec())));
     configure_key_bindings(&mut editor);
     initialize_history(&mut editor)?;
     let mut mode = ClientMode::User;
+    let available_models = llm_name_set(llm_names);
 
     loop {
         let prompt = render_prompt(prompt_target, mode);
@@ -256,8 +405,51 @@ fn run_repl(
                 save_history(&mut editor)?;
 
                 if line.starts_with('/') {
-                    match parse_input(line, &HashSet::new(), llm.is_some(), mode) {
+                    match parse_input(
+                        line,
+                        &HashSet::new(),
+                        &available_models,
+                        active_model
+                            .as_ref()
+                            .and_then(|name| llms.get(name))
+                            .is_some(),
+                        mode,
+                    ) {
                         Ok(ClientCommand::Help) => println!("{HELP_TEXT}"),
+                        Ok(ClientCommand::Connect) => {
+                            let model_reachable = runtime.block_on(active_model_reachable(
+                                llm_probes,
+                                active_model.as_deref(),
+                                client_timeout,
+                            ));
+                            connect_client(
+                                runtime,
+                                &mut client,
+                                client_url,
+                                client_timeout,
+                                version,
+                                active_model.as_deref(),
+                                model_reachable,
+                            );
+                        }
+                        Ok(ClientCommand::Disconnect) => {
+                            let model_reachable = runtime.block_on(active_model_reachable(
+                                llm_probes,
+                                active_model.as_deref(),
+                                client_timeout,
+                            ));
+                            disconnect_client(
+                                runtime,
+                                &mut client,
+                                client_url,
+                                version,
+                                active_model.as_deref(),
+                                model_reachable,
+                            )?;
+                        }
+                        Ok(ClientCommand::ListModels) => {
+                            println!("{}", format_list_models(llm_probes));
+                        }
                         Ok(ClientCommand::UserMode) => {
                             mode = ClientMode::User;
                             println!("Switched to user mode.");
@@ -266,10 +458,27 @@ fn run_repl(
                             mode = ClientMode::Developer;
                             println!("Switched to developer mode.");
                         }
-                        Ok(ClientCommand::Tools) => match runtime.block_on(client.list_tools()) {
-                            Ok(tools) => println!("{}", format_tools(&tools)),
-                            Err(error) => eprintln!("{}", format_runtime_error(&error)),
-                        },
+                        Ok(ClientCommand::Model(name)) => handle_model_command(
+                            runtime,
+                            &mut active_model,
+                            name,
+                            llm_probes,
+                            client_timeout,
+                            llm_names,
+                            version,
+                            client_url,
+                            client.is_some(),
+                        ),
+                        Ok(ClientCommand::Tools) => {
+                            let Some(active_client) = client.as_ref() else {
+                                eprintln!("{}", disconnected_message());
+                                continue;
+                            };
+                            match runtime.block_on(active_client.list_tools()) {
+                                Ok(tools) => println!("{}", format_tools(&tools)),
+                                Err(error) => eprintln!("{}", format_runtime_error(&error)),
+                            }
+                        }
                         Ok(ClientCommand::Exit) => break,
                         Ok(_) => unreachable!("slash commands should not resolve to tool calls"),
                         Err(e) => eprintln!("Error: {e}"),
@@ -277,7 +486,12 @@ fn run_repl(
                     continue;
                 }
 
-                let tools = match runtime.block_on(client.list_tools()) {
+                let Some(active_client) = client.as_ref() else {
+                    eprintln!("{}", disconnected_message());
+                    continue;
+                };
+
+                let tools = match runtime.block_on(active_client.list_tools()) {
                     Ok(tools) => tools,
                     Err(error) => {
                         eprintln!("{}", format_runtime_error(&error));
@@ -286,8 +500,49 @@ fn run_repl(
                 };
                 let available_tools = tool_name_set(&tools);
 
-                match parse_input(line, &available_tools, llm.is_some(), mode) {
+                match parse_input(
+                    line,
+                    &available_tools,
+                    &available_models,
+                    active_model
+                        .as_ref()
+                        .and_then(|name| llms.get(name))
+                        .is_some(),
+                    mode,
+                ) {
                     Ok(ClientCommand::Help) => println!("{HELP_TEXT}"),
+                    Ok(ClientCommand::Connect) => {
+                        let model_reachable = runtime.block_on(active_model_reachable(
+                            llm_probes,
+                            active_model.as_deref(),
+                            client_timeout,
+                        ));
+                        connect_client(
+                            runtime,
+                            &mut client,
+                            client_url,
+                            client_timeout,
+                            version,
+                            active_model.as_deref(),
+                            model_reachable,
+                        );
+                    }
+                    Ok(ClientCommand::Disconnect) => {
+                        let model_reachable = runtime.block_on(active_model_reachable(
+                            llm_probes,
+                            active_model.as_deref(),
+                            client_timeout,
+                        ));
+                        disconnect_client(
+                            runtime,
+                            &mut client,
+                            client_url,
+                            version,
+                            active_model.as_deref(),
+                            model_reachable,
+                        )?;
+                    }
+                    Ok(ClientCommand::ListModels) => println!("{}", format_list_models(llm_probes)),
                     Ok(ClientCommand::UserMode) => {
                         mode = ClientMode::User;
                         println!("Switched to user mode.");
@@ -296,11 +551,22 @@ fn run_repl(
                         mode = ClientMode::Developer;
                         println!("Switched to developer mode.");
                     }
+                    Ok(ClientCommand::Model(name)) => handle_model_command(
+                        runtime,
+                        &mut active_model,
+                        name,
+                        llm_probes,
+                        client_timeout,
+                        llm_names,
+                        version,
+                        client_url,
+                        client.is_some(),
+                    ),
                     Ok(ClientCommand::Tools) => println!("{}", format_tools(&tools)),
                     Ok(ClientCommand::Exit) => break,
                     Ok(ClientCommand::ToolCall { name, args }) => execute_tool_command(
                         runtime,
-                        client,
+                        active_client,
                         &mut editor,
                         &tools,
                         defaults,
@@ -309,9 +575,10 @@ fn run_repl(
                         args,
                     )?,
                     Ok(ClientCommand::NaturalLanguage(request)) => {
-                        let Some(llm) = llm else {
+                        let Some(llm) = active_model.as_ref().and_then(|name| llms.get(name))
+                        else {
                             eprintln!(
-                                "Error: Natural-language execution requires an [llm] section in the client configuration."
+                                "Error: Natural-language execution requires a configured client LLM profile."
                             );
                             continue;
                         };
@@ -322,7 +589,7 @@ fn run_repl(
                         {
                             Ok(ClientCommand::ToolCall { name, args }) => execute_tool_command(
                                 runtime,
-                                client,
+                                active_client,
                                 &mut editor,
                                 &tools,
                                 defaults,
@@ -349,6 +616,10 @@ fn run_repl(
             }
             Err(e) => return Err(anyhow!("Failed to read input: {}", e)),
         }
+    }
+
+    if let Some(active_client) = client {
+        runtime.block_on(active_client.cleanup())?;
     }
 
     Ok(())
@@ -426,8 +697,34 @@ fn is_slash_command_prefix(input: &str) -> bool {
     input.starts_with('/') && !input.chars().any(char::is_whitespace)
 }
 
+fn model_completion_prefix(input: &str) -> Option<(usize, &str)> {
+    if let Some(model_prefix) = input.strip_prefix(MODEL_COMMAND_PREFIX) {
+        if !model_prefix.chars().any(char::is_whitespace) {
+            return Some((MODEL_COMMAND_PREFIX.len(), model_prefix));
+        }
+    }
+
+    None
+}
+
 fn format_runtime_error(error: &anyhow::Error) -> String {
     format!("Error: {error}")
+}
+
+fn connection_marker(connected: bool) -> &'static str {
+    if connected {
+        "\u{1b}[32m✓\u{1b}[0m"
+    } else {
+        "\u{1b}[31m✗\u{1b}[0m"
+    }
+}
+
+fn model_label(model: Option<&str>) -> &str {
+    model.unwrap_or("none")
+}
+
+fn disconnected_message() -> &'static str {
+    "Error: Not connected to the configured MCP server. Use /connect."
 }
 
 fn format_tool_result(result: &CallToolResult) -> Result<String> {
@@ -685,6 +982,7 @@ fn format_pretty_json<T: Serialize>(value: &T, label: &str) -> Result<String> {
 fn parse_input(
     input: &str,
     available_tools: &HashSet<String>,
+    available_models: &HashSet<String>,
     llm_enabled: bool,
     mode: ClientMode,
 ) -> Result<ClientCommand> {
@@ -692,13 +990,47 @@ fn parse_input(
 
     match trimmed {
         "/help" => Ok(ClientCommand::Help),
+        "/connect" => Ok(ClientCommand::Connect),
+        "/disconnect" => Ok(ClientCommand::Disconnect),
+        "/list-models" => Ok(ClientCommand::ListModels),
         "/user" => Ok(ClientCommand::UserMode),
         "/developer" => Ok(ClientCommand::DeveloperMode),
+        MODEL_COMMAND => Ok(ClientCommand::Model(None)),
         "/tools" => Ok(ClientCommand::Tools),
         "/exit" | "/quit" => Ok(ClientCommand::Exit),
+        _ if trimmed.starts_with(MODEL_COMMAND_PREFIX) => {
+            parse_model_command(trimmed, available_models)
+        }
         _ if trimmed.starts_with('/') => Err(anyhow!("Unknown command '{}'", trimmed)),
         _ => parse_mode_input(trimmed, available_tools, llm_enabled, mode),
     }
+}
+
+fn parse_model_command(input: &str, available_models: &HashSet<String>) -> Result<ClientCommand> {
+    let Some(name) = input.strip_prefix(MODEL_COMMAND_PREFIX) else {
+        bail!("Missing model command");
+    };
+    let name = name.trim();
+
+    if name.is_empty() {
+        return Ok(ClientCommand::Model(None));
+    }
+
+    if available_models.contains(name) {
+        return Ok(ClientCommand::Model(Some(name.to_string())));
+    }
+
+    if available_models.is_empty() {
+        bail!("No LLM models are configured.");
+    }
+
+    let mut models = available_models.iter().cloned().collect::<Vec<_>>();
+    models.sort();
+    bail!(
+        "Unknown model '{}'. Available models: {}",
+        name,
+        models.join(", ")
+    )
 }
 
 fn parse_mode_input(
@@ -715,7 +1047,7 @@ fn parse_mode_input(
                 Ok(ClientCommand::NaturalLanguage(input.to_string()))
             } else {
                 Err(anyhow!(
-                    "User mode requires an [llm] section in the client configuration."
+                    "User mode requires a configured client LLM profile."
                 ))
             }
         }
@@ -919,6 +1251,220 @@ fn tool_server_from_endpoint(server: &str) -> Result<String> {
 
 fn tool_name_set(tools: &[Tool]) -> HashSet<String> {
     tools.iter().map(|tool| tool.name.to_string()).collect()
+}
+
+fn llm_name_set(names: &[String]) -> HashSet<String> {
+    names.iter().cloned().collect()
+}
+
+fn sorted_llm_names(llms: &HashMap<String, LlmConfiguration>) -> Vec<String> {
+    let mut names = llms.keys().cloned().collect::<Vec<_>>();
+    names.sort();
+    names
+}
+
+fn default_model_name(model: &str) -> Option<&str> {
+    let model = model.trim();
+    if model.is_empty() { None } else { Some(model) }
+}
+
+fn handle_model_command(
+    runtime: &Runtime,
+    active_model: &mut Option<String>,
+    name: Option<String>,
+    llm_probes: &HashMap<String, LlmStatusProbe>,
+    client_timeout: u64,
+    llm_names: &[String],
+    version: &str,
+    client_url: &str,
+    connected: bool,
+) {
+    match name {
+        Some(name) => {
+            *active_model = Some(name.clone());
+            println!("Switched to model '{name}'.");
+            let model_reachable = runtime.block_on(active_model_reachable(
+                llm_probes,
+                active_model.as_deref(),
+                client_timeout,
+            ));
+            println!(
+                "{}",
+                startup_banner(
+                    version,
+                    client_url,
+                    connected,
+                    active_model.as_deref(),
+                    model_reachable,
+                )
+            );
+        }
+        None => println!(
+            "{}",
+            format_model_status(active_model.as_deref(), llm_names)
+        ),
+    }
+}
+
+fn format_model_status(active_model: Option<&str>, llm_names: &[String]) -> String {
+    if llm_names.is_empty() {
+        return "No LLM models configured.".to_string();
+    }
+
+    let current = active_model.unwrap_or("none");
+    format!(
+        "Current model: {current}\nAvailable models: {}",
+        llm_names.join(", ")
+    )
+}
+
+fn format_list_models(llm_probes: &HashMap<String, LlmStatusProbe>) -> String {
+    if llm_probes.is_empty() {
+        return "No LLM models configured.".to_string();
+    }
+
+    let mut rows = llm_probes
+        .iter()
+        .map(|(name, probe)| (name.as_str(), probe.model.as_str(), probe.provider.as_str()))
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| left.0.cmp(right.0));
+
+    let name_header = "Name";
+    let model_header = "Model";
+    let provider_header = "Provider";
+
+    let name_width = rows
+        .iter()
+        .map(|(name, _, _)| name.len())
+        .max()
+        .unwrap_or(0)
+        .max(name_header.len());
+    let model_width = rows
+        .iter()
+        .map(|(_, model, _)| model.len())
+        .max()
+        .unwrap_or(0)
+        .max(model_header.len());
+    let provider_width = rows
+        .iter()
+        .map(|(_, _, provider)| provider.len())
+        .max()
+        .unwrap_or(0)
+        .max(provider_header.len());
+
+    let mut lines = Vec::with_capacity(rows.len() + 2);
+    lines.push(format!(
+        "{name_header:<name_width$}  {model_header:<model_width$}  {provider_header:<provider_width$}",
+    ));
+    lines.push(format!(
+        "{:-<name_width$}  {:-<model_width$}  {:-<provider_width$}",
+        "", "", "",
+    ));
+    lines.extend(rows.into_iter().map(|(name, model, provider)| {
+        format!("{name:<name_width$}  {model:<model_width$}  {provider:<provider_width$}",)
+    }));
+    lines.join("\n")
+}
+
+fn connect_client(
+    runtime: &Runtime,
+    client: &mut Option<McpClient>,
+    client_url: &str,
+    client_timeout: u64,
+    version: &str,
+    active_model: Option<&str>,
+    model_reachable: bool,
+) {
+    if client.is_some() {
+        println!("Already connected to {client_url}.");
+        return;
+    }
+
+    match runtime.block_on(McpClient::connect(client_url, client_timeout)) {
+        Ok(active_client) => {
+            *client = Some(active_client);
+            println!("Connected to {client_url}.");
+            println!(
+                "{}",
+                startup_banner(version, client_url, true, active_model, model_reachable)
+            );
+        }
+        Err(_) => eprintln!("{}", format_connect_error(client_url)),
+    }
+}
+
+fn disconnect_client(
+    runtime: &Runtime,
+    client: &mut Option<McpClient>,
+    client_url: &str,
+    version: &str,
+    active_model: Option<&str>,
+    model_reachable: bool,
+) -> Result<()> {
+    let Some(active_client) = client.take() else {
+        println!("Already disconnected.");
+        return Ok(());
+    };
+
+    runtime.block_on(active_client.cleanup())?;
+    println!("Disconnected.");
+    println!(
+        "{}",
+        startup_banner(version, client_url, false, active_model, model_reachable)
+    );
+    Ok(())
+}
+
+async fn active_model_reachable(
+    llm_probes: &HashMap<String, LlmStatusProbe>,
+    active_model: Option<&str>,
+    timeout_secs: u64,
+) -> bool {
+    let Some(active_model) = active_model else {
+        return false;
+    };
+    let Some(probe) = llm_probes.get(active_model) else {
+        return false;
+    };
+    endpoint_reachable(&probe_urls(probe), timeout_secs).await
+}
+
+fn probe_urls(probe: &LlmStatusProbe) -> Vec<String> {
+    match probe.provider.to_lowercase().as_str() {
+        "ollama" => {
+            let base = probe.endpoint.trim_end_matches('/');
+            vec![format!("{base}/api/tags"), format!("{base}/")]
+        }
+        "llama.cpp" | "ramalama" | "vllm" => {
+            let base = normalize_openai_compatible_endpoint(&probe.endpoint);
+            vec![format!("{base}/health"), format!("{base}/v1/models")]
+        }
+        _ => vec![probe.endpoint.trim_end_matches('/').to_string()],
+    }
+}
+
+fn normalize_openai_compatible_endpoint(endpoint: &str) -> String {
+    let endpoint = endpoint.trim_end_matches('/');
+    endpoint.strip_suffix("/v1").unwrap_or(endpoint).to_string()
+}
+
+async fn endpoint_reachable(urls: &[String], timeout_secs: u64) -> bool {
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(timeout_secs))
+        .build()
+    {
+        Ok(client) => client,
+        Err(_) => return false,
+    };
+
+    for url in urls {
+        match client.get(url).send().await {
+            Ok(response) if response.status().is_success() => return true,
+            _ => {}
+        }
+    }
+
+    false
 }
 
 async fn translate_natural_language<L: LlmClient>(
@@ -1168,37 +1714,63 @@ mod tests {
         }
     }
 
+    fn sample_models() -> HashSet<String> {
+        HashSet::from(["gemma".to_string(), "qwen".to_string()])
+    }
+
     #[test]
     fn test_parse_slash_commands() {
         let tools = HashSet::new();
+        let models = sample_models();
         assert_eq!(
-            parse_input("/help", &tools, false, ClientMode::User).unwrap(),
+            parse_input("/help", &tools, &models, false, ClientMode::User).unwrap(),
             ClientCommand::Help
         );
         assert_eq!(
-            parse_input("/tools", &tools, false, ClientMode::User).unwrap(),
+            parse_input("/connect", &tools, &models, false, ClientMode::User).unwrap(),
+            ClientCommand::Connect
+        );
+        assert_eq!(
+            parse_input("/disconnect", &tools, &models, false, ClientMode::User).unwrap(),
+            ClientCommand::Disconnect
+        );
+        assert_eq!(
+            parse_input("/list-models", &tools, &models, false, ClientMode::User).unwrap(),
+            ClientCommand::ListModels
+        );
+        assert_eq!(
+            parse_input("/tools", &tools, &models, false, ClientMode::User).unwrap(),
             ClientCommand::Tools
         );
         assert_eq!(
-            parse_input("/quit", &tools, false, ClientMode::User).unwrap(),
+            parse_input("/quit", &tools, &models, false, ClientMode::User).unwrap(),
             ClientCommand::Exit
         );
         assert_eq!(
-            parse_input("/user", &tools, false, ClientMode::Developer).unwrap(),
+            parse_input("/user", &tools, &models, false, ClientMode::Developer).unwrap(),
             ClientCommand::UserMode
         );
         assert_eq!(
-            parse_input("/developer", &tools, false, ClientMode::User).unwrap(),
+            parse_input("/developer", &tools, &models, false, ClientMode::User).unwrap(),
             ClientCommand::DeveloperMode
+        );
+        assert_eq!(
+            parse_input("/model", &tools, &models, true, ClientMode::User).unwrap(),
+            ClientCommand::Model(None)
+        );
+        assert_eq!(
+            parse_input("/model qwen", &tools, &models, true, ClientMode::User).unwrap(),
+            ClientCommand::Model(Some("qwen".to_string()))
         );
     }
 
     #[test]
     fn test_parse_tool_calls_in_developer_mode() {
         let tools = HashSet::from(["info".to_string(), "get_backup_info".to_string()]);
+        let models = sample_models();
 
         assert_eq!(
-            parse_input("info", &tools, false, ClientMode::Developer).unwrap(),
+            parse_input("info", &tools, &models, false, ClientMode::Developer).unwrap(),
             ClientCommand::ToolCall {
                 name: "info".to_string(),
                 args: HashMap::new(),
@@ -1209,6 +1781,7 @@ mod tests {
             parse_input(
                 r#"get_backup_info {"server":"primary"}"#,
                 &tools,
+                &models,
                 false,
                 ClientMode::Developer
             )
@@ -1223,11 +1796,13 @@ mod tests {
     #[test]
     fn test_parse_tool_calls_in_user_mode() {
         let tools = HashSet::from(["list_backups".to_string()]);
+        let models = sample_models();
 
         assert_eq!(
             parse_input(
                 r#"list_backups {"server":"primary"}"#,
                 &tools,
+                &models,
                 true,
                 ClientMode::User
             )
@@ -1242,11 +1817,13 @@ mod tests {
     #[test]
     fn test_parse_tool_calls_in_user_mode_without_llm() {
         let tools = HashSet::from(["list_backups".to_string()]);
+        let models = sample_models();
 
         assert_eq!(
             parse_input(
                 r#"list_backups {"server":"primary"}"#,
                 &tools,
+                &models,
                 false,
                 ClientMode::User
             )
@@ -1261,18 +1838,22 @@ mod tests {
     #[test]
     fn test_parse_tool_call_rejects_non_object_args() {
         let tools = HashSet::from(["info".to_string()]);
-        let err = parse_input("info []", &tools, false, ClientMode::Developer).unwrap_err();
+        let models = sample_models();
+        let err =
+            parse_input("info []", &tools, &models, false, ClientMode::Developer).unwrap_err();
         assert!(err.to_string().contains("JSON object"));
     }
 
     #[test]
     fn test_parse_input_treats_text_as_natural_language_in_user_mode() {
         let tools = HashSet::from(["list_backups".to_string()]);
+        let models = sample_models();
 
         assert_eq!(
             parse_input(
                 "List backups on primary server",
                 &tools,
+                &models,
                 true,
                 ClientMode::User
             )
@@ -1284,29 +1865,42 @@ mod tests {
     #[test]
     fn test_parse_input_reports_missing_llm_in_user_mode() {
         let tools = HashSet::from(["list_backups".to_string()]);
+        let models = sample_models();
 
         let err = parse_input(
             "List backups on primary server",
             &tools,
+            &models,
             false,
             ClientMode::User,
         )
         .unwrap_err();
-        assert!(err.to_string().contains("requires an [llm]"));
+        assert!(
+            err.to_string()
+                .contains("requires a configured client LLM profile")
+        );
     }
 
     #[test]
     fn test_parse_input_rejects_natural_language_in_developer_mode() {
         let tools = HashSet::from(["list_backups".to_string()]);
+        let models = sample_models();
 
         let err = parse_input(
             "List backups on primary server",
             &tools,
+            &models,
             true,
             ClientMode::Developer,
         )
         .unwrap_err();
         assert!(err.to_string().contains("Developer mode expects"));
+    }
+
+    #[test]
+    fn test_parse_model_command_rejects_unknown_name() {
+        let err = parse_model_command("/model llama", &sample_models()).unwrap_err();
+        assert!(err.to_string().contains("Unknown model 'llama'"));
     }
 
     #[test]
@@ -1540,20 +2134,108 @@ mod tests {
     }
 
     #[test]
-    fn test_startup_banner_contains_only_title() {
-        let banner = startup_banner("0.3.0");
+    fn test_normalize_openai_compatible_endpoint_strips_v1_suffix() {
+        assert_eq!(
+            normalize_openai_compatible_endpoint("http://localhost:8100/v1"),
+            "http://localhost:8100"
+        );
+        assert_eq!(
+            normalize_openai_compatible_endpoint("http://localhost:8100/v1/"),
+            "http://localhost:8100"
+        );
+        assert_eq!(
+            normalize_openai_compatible_endpoint("http://localhost:8100"),
+            "http://localhost:8100"
+        );
+    }
+
+    #[test]
+    fn test_probe_urls_use_v1_models_for_openai_compatible_endpoint() {
+        let probe = LlmStatusProbe {
+            model: "ggml-org/gemma-4-E4B-it-GGUF".to_string(),
+            provider: "llama.cpp".to_string(),
+            endpoint: "http://localhost:8100/v1".to_string(),
+        };
+
+        assert_eq!(
+            probe_urls(&probe),
+            vec![
+                "http://localhost:8100/health".to_string(),
+                "http://localhost:8100/v1/models".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_startup_banner_contains_title_mcp_and_model() {
+        let banner = startup_banner(
+            "0.3.0",
+            "http://localhost:8000/mcp",
+            false,
+            Some("qwen"),
+            true,
+        );
 
         assert!(banner.contains("pgmoneta MCP client 0.3.0"));
-        assert!(!banner.contains("Server:"));
-        assert!(!banner.contains("Username:"));
-        assert!(!banner.contains("Help:"));
+        assert!(banner.contains("MCP: http://localhost:8000/mcp"));
+        assert!(banner.contains("Model: qwen"));
+        assert!(banner.contains(connection_marker(false)));
+        assert!(banner.contains(connection_marker(true)));
         assert!(banner.starts_with('┏'));
         assert!(banner.ends_with('┛'));
     }
 
     #[test]
+    fn test_format_list_models_aligns_as_table() {
+        let probes = HashMap::from([
+            (
+                "gemma".to_string(),
+                LlmStatusProbe {
+                    model: "ggml-org/gemma-4-E4B-it-GGUF".to_string(),
+                    provider: "llama.cpp".to_string(),
+                    endpoint: "http://localhost:8100/v1".to_string(),
+                },
+            ),
+            (
+                "qwen".to_string(),
+                LlmStatusProbe {
+                    model: "qwen2.5:3b".to_string(),
+                    provider: "ollama".to_string(),
+                    endpoint: "http://localhost:11434".to_string(),
+                },
+            ),
+        ]);
+
+        assert_eq!(
+            format_list_models(&probes),
+            "Name   Model                         Provider \n\
+             -----  ----------------------------  ---------\n\
+             gemma  ggml-org/gemma-4-E4B-it-GGUF  llama.cpp\n\
+             qwen   qwen2.5:3b                    ollama   "
+        );
+    }
+
+    #[test]
+    fn test_startup_banner_aligns_visible_widths() {
+        let banner = startup_banner(
+            "0.3.0",
+            "http://localhost:8000/mcp",
+            false,
+            Some("gemma-4-E4B-it-GGUF"),
+            true,
+        );
+
+        let widths = banner.lines().map(strip_ansi_codes).collect::<Vec<_>>();
+
+        assert_eq!(widths[0].chars().count(), widths[1].chars().count());
+        assert_eq!(widths[1].chars().count(), widths[2].chars().count());
+        assert_eq!(widths[2].chars().count(), widths[3].chars().count());
+        assert_eq!(widths[3].chars().count(), widths[4].chars().count());
+    }
+
+    #[test]
     fn test_slash_completion_expands_unique_match() {
-        let helper = ClientHelper;
+        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()]);
         let history = DefaultHistory::new();
         let context = ReadlineContext::new(&history);
 
@@ -1566,7 +2248,7 @@ mod tests {
 
     #[test]
     fn test_slash_completion_lists_matching_commands() {
-        let helper = ClientHelper;
+        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()]);
         let history = DefaultHistory::new();
         let context = ReadlineContext::new(&history);
 
@@ -1578,13 +2260,32 @@ mod tests {
 
         assert_eq!(
             replacements,
-            vec!["/developer", "/exit", "/help", "/quit", "/tools", "/user"]
+            vec![
+                "/connect",
+                "/developer",
+                "/disconnect",
+                "/exit",
+                "/help",
+                "/list-models",
+                "/model",
+                "/quit",
+                "/tools",
+                "/user",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_disconnected_message_mentions_connect_command() {
+        assert_eq!(
+            disconnected_message(),
+            "Error: Not connected to the configured MCP server. Use /connect."
         );
     }
 
     #[test]
     fn test_slash_completion_ignores_non_command_inputs() {
-        let helper = ClientHelper;
+        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()]);
         let history = DefaultHistory::new();
         let context = ReadlineContext::new(&history);
 
@@ -1596,6 +2297,42 @@ mod tests {
                 .1
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn test_model_completion_lists_matching_models() {
+        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()]);
+        let history = DefaultHistory::new();
+        let context = ReadlineContext::new(&history);
+
+        let (start, matches) = helper
+            .complete("/model g", "/model g".len(), &context)
+            .unwrap();
+        let replacements = matches
+            .into_iter()
+            .map(|candidate| candidate.replacement)
+            .collect::<Vec<_>>();
+
+        assert_eq!(start, MODEL_COMMAND_PREFIX.len());
+        assert_eq!(replacements, vec!["gemma"]);
+    }
+
+    #[test]
+    fn test_model_completion_lists_all_models_after_space() {
+        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()]);
+        let history = DefaultHistory::new();
+        let context = ReadlineContext::new(&history);
+
+        let (start, matches) = helper
+            .complete(MODEL_COMMAND_PREFIX, MODEL_COMMAND_PREFIX.len(), &context)
+            .unwrap();
+        let replacements = matches
+            .into_iter()
+            .map(|candidate| candidate.replacement)
+            .collect::<Vec<_>>();
+
+        assert_eq!(start, MODEL_COMMAND_PREFIX.len());
+        assert_eq!(replacements, vec!["gemma", "qwen"]);
     }
 
     #[test]

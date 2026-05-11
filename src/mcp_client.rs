@@ -78,6 +78,11 @@ impl McpClient {
         })
     }
 
+    /// Returns the configured MCP URL for this client session.
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
     /// Cleanly closes the MCP session
     pub async fn cleanup(self) -> anyhow::Result<()> {
         self.session.cancel().await?;

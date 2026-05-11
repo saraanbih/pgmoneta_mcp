@@ -35,6 +35,6 @@ See the manual or [LOCAL_LLM.md](LOCAL_LLM.md) for detailed setup instructions.
 | Property | Default | Unit | Required | Description |
 | :------- | :------ | :--- | :------- | :---------- |
 | provider | | String | Yes | The local LLM backend (`ollama`, `llama.cpp` or `ramalama`) |
-| endpoint | | String | Yes | The URL of the LLM inference server |
+| endpoint | | String | Yes | The URL of the LLM inference server. For `llama.cpp`, `ramalama`, and `vllm`, either the server root URL or the OpenAI-compatible `/v1` URL can be configured |
 | model | | String | Yes | The model name to use for inference |
 | max_tool_rounds | 10 | Int | No | Maximum tool-calling iterations per user prompt |

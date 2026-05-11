@@ -44,7 +44,9 @@ Start the RamaLama server using your chosen model. RamaLama will automatically r
 ramalama --store /mnt/ai/ramalama serve granite-code:8b
 ```
 
-The default endpoint will be `http://localhost:8080`.
+The default endpoint will be `http://localhost:8080`. In pgmoneta MCP
+configuration you can use either `http://localhost:8080` or
+`http://localhost:8080/v1`.
 
 ### Configure pgmoneta_mcp
 
@@ -53,7 +55,7 @@ Add or update the `[llm]` section in `pgmoneta-mcp.conf`:
 ``` ini
 [llm]
 provider = ramalama
-endpoint = http://localhost:8080
+endpoint = http://localhost:8080/v1
 model = granite-3.0-8b-instruct
 max_tool_rounds = 10
 ```
