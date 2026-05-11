@@ -77,8 +77,10 @@ Start the client by
 to enter its interactive mode. Use `/model` to inspect the active profile and
 `/model [name]` to switch between the configured profiles at runtime. Press Tab
 after `/model ` to complete the available profile names. The client header shows
-the configured MCP URL and active profile, with independent green tick / red
-cross indicators for MCP reachability and active model endpoint reachability.
+the current MCP target URL and active profile, with independent green tick /
+red cross indicators for MCP reachability and active model endpoint
+reachability. `/connect [url]` can switch the current MCP target URL at
+runtime, while `/connect` without a URL resets it to the configured default.
 Use `/list-models` to print the configured client profiles as an aligned table
 with `Name`, `Model`, and `Provider` columns.
 

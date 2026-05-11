@@ -78,7 +78,7 @@ impl McpClient {
         })
     }
 
-    /// Returns the configured MCP URL for this client session.
+    /// Returns the MCP URL for this client session.
     pub fn url(&self) -> &str {
         &self.url
     }

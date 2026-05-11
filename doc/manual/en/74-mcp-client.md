@@ -88,23 +88,24 @@ Start the client:
 ./pgmoneta-mcp-client -c pgmoneta-mcp-client.conf -u pgmoneta-mcp-users.conf
 ```
 
-The prompt uses the selected username and configured MCP URL:
+The prompt uses the selected username and current MCP target URL:
 
 ```text
 admin@localhost:8000/mcp$ 
 ```
 
-The startup header shows the configured MCP URL and active model profile. The
-MCP line uses a green tick or red cross based on MCP server reachability, while
-the model line uses its own green tick or red cross based on active model
+The startup header shows the current MCP target URL and active model profile.
+The MCP line uses a green tick or red cross based on MCP server reachability,
+while the model line uses its own green tick or red cross based on active model
 endpoint reachability. The same header is refreshed after `/connect`,
-`/disconnect`, and `/model [name]`.
+`/disconnect`, and `/model [name]`. The prompt follows the same current MCP
+target URL, even after a failed `/connect` or after `/disconnect`.
 
 ## Commands
 
 ```text
-/connect              Connect to the configured MCP server
-/disconnect           Disconnect from the configured MCP server
+/connect [url]        Connect to [url] or the configured MCP server target
+/disconnect           Disconnect from the current MCP server target
 /list-models          List configured LLM profiles in a table
 /model
 /model gemma
@@ -115,13 +116,18 @@ endpoint reachability. The same header is refreshed after `/connect`,
 /exit or /quit        Exit the client
 ```
 
-The client uses `url` from `pgmoneta-mcp-client.conf` as the MCP endpoint to
-connect to, derives the tool `server` argument from that endpoint's host name,
-and injects `username` from the users file passed with `-u` / `--users`. If the
-users file contains multiple admin usernames, the client asks you to choose one
-at startup. For any remaining parameters, the client prompts from the tool
-schema. Required fields must be filled in, while optional fields can be skipped
-by pressing Enter.
+The client uses `url` from `pgmoneta-mcp-client.conf` as its default MCP
+endpoint target, derives the tool `server` argument from that configured
+endpoint's host name, and injects `username` from the users file passed with
+`-u` / `--users`. If the users file contains multiple admin usernames, the
+client asks you to choose one at startup. For any remaining parameters, the
+client prompts from the tool schema. Required fields must be filled in, while
+optional fields can be skipped by pressing Enter.
+
+`/connect [url]` switches the current MCP target URL. If `[url]` is omitted,
+the client reconnects to the configured target from
+`pgmoneta-mcp-client.conf`. If the client is already connected, it disconnects
+before reconnecting.
 
 `/list-models` prints the configured LLM profiles as an aligned table with the
 columns `Name`, `Model`, and `Provider`.
@@ -155,6 +161,9 @@ Examples:
 ```bash
 admin@localhost:8000/mcp$ /disconnect
 admin@localhost:8000/mcp$ /connect
+admin@localhost:8000/mcp$ /connect http://localhost:8200/mcp
+admin@localhost:8200/mcp$ /disconnect
+admin@localhost:8200/mcp$ /connect
 admin@localhost:8000/mcp$ /list-models
 admin@localhost:8000/mcp$ /user
 admin@localhost:8000/mcp$ /model

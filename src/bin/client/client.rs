@@ -69,8 +69,8 @@ Requests to backup a server, such as `Backup primary server` will call the `back
 const HELP_TEXT: &str = "\
 Basic usage:
   /help                 Show this help
-  /connect              Connect to the configured MCP server
-  /disconnect           Disconnect from the configured MCP server
+  /connect [url]        Connect to [url] or the configured MCP server target
+  /disconnect           Disconnect from the current MCP server target
   /user                 User mode (default). Accept natural-language requests
   /developer            Developer mode. Accept <tool-name> {JSON} input and print full JSON responses
   /list-models          List configured LLM profiles as name, model, and provider
@@ -90,6 +90,11 @@ matching JSON arguments before executing it.
 Use `/model` to show the current LLM profile and `/model <name>` to switch to
 another configured profile. Press Tab after `/model ` to complete the available
 profile names.
+
+`/connect [url]` switches the current MCP target. If you omit `[url]`, the client
+uses the configured URL. If the client is already connected, it disconnects first.
+The prompt and status header show the current MCP target URL, including after a
+failed `/connect` or after `/disconnect`.
 
 Developer mode is intended for direct MCP/tool work. It expects explicit
 `<tool-name> {JSON}` input and prints the full JSON response without the
@@ -122,7 +127,7 @@ struct Args {
 #[derive(Debug, PartialEq)]
 enum ClientCommand {
     Help,
-    Connect,
+    Connect(Option<String>),
     Disconnect,
     ListModels,
     UserMode,
@@ -258,7 +263,6 @@ fn main() -> Result<()> {
         server: tool_server_from_endpoint(&config.client.url)?,
         username: select_username(&args.users)?,
     };
-    let prompt_target = prompt_target_from_url(&config.client.url, &defaults.username)?;
     let runtime = Runtime::new().context("Failed to create Tokio runtime")?;
     let client = match runtime.block_on(McpClient::connect(
         &config.client.url,
@@ -292,7 +296,6 @@ fn main() -> Result<()> {
         client,
         &config.client.url,
         config.client.timeout,
-        &prompt_target,
         &defaults,
         &llms,
         &llm_probes,
@@ -300,10 +303,6 @@ fn main() -> Result<()> {
         env!("CARGO_PKG_VERSION"),
         active_model,
     )
-}
-
-fn format_connect_error(url: &str) -> String {
-    format!("No connection to {url}")
 }
 
 fn startup_banner(
@@ -373,9 +372,8 @@ fn strip_ansi_codes(text: &str) -> String {
 fn run_repl(
     runtime: &Runtime,
     mut client: Option<McpClient>,
-    client_url: &str,
+    configured_client_url: &str,
     client_timeout: u64,
-    prompt_target: &str,
     defaults: &ClientDefaults,
     llms: &HashMap<String, ConfiguredLlm>,
     llm_probes: &HashMap<String, LlmStatusProbe>,
@@ -389,9 +387,13 @@ fn run_repl(
     initialize_history(&mut editor)?;
     let mut mode = ClientMode::User;
     let available_models = llm_name_set(llm_names);
+    let mut current_client_url = configured_client_url.to_string();
 
     loop {
-        let prompt = render_prompt(prompt_target, mode);
+        let prompt = render_prompt(
+            &display_prompt_target(&current_client_url, &defaults.username),
+            mode,
+        );
         match editor.readline(&prompt) {
             Ok(line) => {
                 let line = line.trim();
@@ -416,21 +418,23 @@ fn run_repl(
                         mode,
                     ) {
                         Ok(ClientCommand::Help) => println!("{HELP_TEXT}"),
-                        Ok(ClientCommand::Connect) => {
+                        Ok(ClientCommand::Connect(connect_url)) => {
                             let model_reachable = runtime.block_on(active_model_reachable(
                                 llm_probes,
                                 active_model.as_deref(),
                                 client_timeout,
                             ));
+                            current_client_url =
+                                connect_url.unwrap_or_else(|| configured_client_url.to_string());
                             connect_client(
                                 runtime,
                                 &mut client,
-                                client_url,
+                                &current_client_url,
                                 client_timeout,
                                 version,
                                 active_model.as_deref(),
                                 model_reachable,
-                            );
+                            )?;
                         }
                         Ok(ClientCommand::Disconnect) => {
                             let model_reachable = runtime.block_on(active_model_reachable(
@@ -441,7 +445,7 @@ fn run_repl(
                             disconnect_client(
                                 runtime,
                                 &mut client,
-                                client_url,
+                                &current_client_url,
                                 version,
                                 active_model.as_deref(),
                                 model_reachable,
@@ -466,7 +470,7 @@ fn run_repl(
                             client_timeout,
                             llm_names,
                             version,
-                            client_url,
+                            &current_client_url,
                             client.is_some(),
                         ),
                         Ok(ClientCommand::Tools) => {
@@ -511,21 +515,23 @@ fn run_repl(
                     mode,
                 ) {
                     Ok(ClientCommand::Help) => println!("{HELP_TEXT}"),
-                    Ok(ClientCommand::Connect) => {
+                    Ok(ClientCommand::Connect(connect_url)) => {
                         let model_reachable = runtime.block_on(active_model_reachable(
                             llm_probes,
                             active_model.as_deref(),
                             client_timeout,
                         ));
+                        current_client_url =
+                            connect_url.unwrap_or_else(|| configured_client_url.to_string());
                         connect_client(
                             runtime,
                             &mut client,
-                            client_url,
+                            &current_client_url,
                             client_timeout,
                             version,
                             active_model.as_deref(),
                             model_reachable,
-                        );
+                        )?;
                     }
                     Ok(ClientCommand::Disconnect) => {
                         let model_reachable = runtime.block_on(active_model_reachable(
@@ -536,7 +542,7 @@ fn run_repl(
                         disconnect_client(
                             runtime,
                             &mut client,
-                            client_url,
+                            &current_client_url,
                             version,
                             active_model.as_deref(),
                             model_reachable,
@@ -559,7 +565,7 @@ fn run_repl(
                         client_timeout,
                         llm_names,
                         version,
-                        client_url,
+                        &current_client_url,
                         client.is_some(),
                     ),
                     Ok(ClientCommand::Tools) => println!("{}", format_tools(&tools)),
@@ -990,7 +996,7 @@ fn parse_input(
 
     match trimmed {
         "/help" => Ok(ClientCommand::Help),
-        "/connect" => Ok(ClientCommand::Connect),
+        "/connect" => Ok(ClientCommand::Connect(None)),
         "/disconnect" => Ok(ClientCommand::Disconnect),
         "/list-models" => Ok(ClientCommand::ListModels),
         "/user" => Ok(ClientCommand::UserMode),
@@ -998,12 +1004,30 @@ fn parse_input(
         MODEL_COMMAND => Ok(ClientCommand::Model(None)),
         "/tools" => Ok(ClientCommand::Tools),
         "/exit" | "/quit" => Ok(ClientCommand::Exit),
+        _ if trimmed.starts_with("/connect ") => parse_connect_command(trimmed),
         _ if trimmed.starts_with(MODEL_COMMAND_PREFIX) => {
             parse_model_command(trimmed, available_models)
         }
         _ if trimmed.starts_with('/') => Err(anyhow!("Unknown command '{}'", trimmed)),
         _ => parse_mode_input(trimmed, available_tools, llm_enabled, mode),
     }
+}
+
+fn parse_connect_command(input: &str) -> Result<ClientCommand> {
+    let Some(url) = input.strip_prefix("/connect") else {
+        bail!("Missing connect command");
+    };
+    let url = url.trim();
+
+    if url.is_empty() {
+        return Ok(ClientCommand::Connect(None));
+    }
+
+    if url.split_whitespace().count() > 1 {
+        bail!("Usage: /connect [url]");
+    }
+
+    Ok(ClientCommand::Connect(Some(url.to_string())))
 }
 
 fn parse_model_command(input: &str, available_models: &HashSet<String>) -> Result<ClientCommand> {
@@ -1374,10 +1398,10 @@ fn connect_client(
     version: &str,
     active_model: Option<&str>,
     model_reachable: bool,
-) {
-    if client.is_some() {
-        println!("Already connected to {client_url}.");
-        return;
+) -> Result<()> {
+    if let Some(active_client) = client.take() {
+        runtime.block_on(active_client.cleanup())?;
+        println!("Disconnected.");
     }
 
     match runtime.block_on(McpClient::connect(client_url, client_timeout)) {
@@ -1389,8 +1413,14 @@ fn connect_client(
                 startup_banner(version, client_url, true, active_model, model_reachable)
             );
         }
-        Err(_) => eprintln!("{}", format_connect_error(client_url)),
+        Err(_) => {
+            println!(
+                "{}",
+                startup_banner(version, client_url, false, active_model, model_reachable)
+            );
+        }
     }
+    Ok(())
 }
 
 fn disconnect_client(
@@ -1530,6 +1560,10 @@ fn prompt_target_from_url(url: &str, username: &str) -> Result<String> {
         .unwrap_or_default();
 
     Ok(format!("{username}@{host}:{port}{path}{query}"))
+}
+
+fn display_prompt_target(url: &str, username: &str) -> String {
+    prompt_target_from_url(url, username).unwrap_or_else(|_| format!("{username}@{url}"))
 }
 
 fn render_prompt(prompt_target: &str, mode: ClientMode) -> String {
@@ -1728,7 +1762,18 @@ mod tests {
         );
         assert_eq!(
             parse_input("/connect", &tools, &models, false, ClientMode::User).unwrap(),
-            ClientCommand::Connect
+            ClientCommand::Connect(None)
+        );
+        assert_eq!(
+            parse_input(
+                "/connect http://localhost:9000/mcp",
+                &tools,
+                &models,
+                false,
+                ClientMode::User
+            )
+            .unwrap(),
+            ClientCommand::Connect(Some("http://localhost:9000/mcp".to_string()))
         );
         assert_eq!(
             parse_input("/disconnect", &tools, &models, false, ClientMode::User).unwrap(),
@@ -1904,6 +1949,12 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_connect_command_rejects_extra_arguments() {
+        let err = parse_connect_command("/connect http://localhost:9000/mcp now").unwrap_err();
+        assert_eq!(err.to_string(), "Usage: /connect [url]");
+    }
+
+    #[test]
     fn test_apply_tool_defaults_injects_username_only() {
         let schema = serde_json::from_value(json!({
             "properties": {
@@ -2069,6 +2120,14 @@ mod tests {
     }
 
     #[test]
+    fn test_display_prompt_target_falls_back_to_raw_url() {
+        assert_eq!(
+            display_prompt_target("localhost:8080/mcp", "admin"),
+            "admin@localhost:8080/mcp"
+        );
+    }
+
+    #[test]
     fn test_render_prompt_uses_mode_specific_suffix() {
         assert_eq!(
             render_prompt("admin@localhost:8000/mcp", ClientMode::User),
@@ -2122,14 +2181,6 @@ mod tests {
         assert_eq!(
             path,
             PathBuf::from("/tmp/pgmoneta-home/.pgmoneta-mcp/pgmoneta-mcp-client.history")
-        );
-    }
-
-    #[test]
-    fn test_format_connect_error_uses_client_url() {
-        assert_eq!(
-            format_connect_error("http://localhost:8000/mcp"),
-            "No connection to http://localhost:8000/mcp"
         );
     }
 
