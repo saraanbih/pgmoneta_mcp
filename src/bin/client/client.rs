@@ -55,6 +55,7 @@ const SLASH_COMMANDS: &[&str] = &[
     "/help",
     "/list-models",
     "/model",
+    "/reload",
     "/quit",
     "/tools",
     "/user",
@@ -71,6 +72,7 @@ Basic usage:
   /help                 Show this help
   /connect [url]        Connect to [url] or the configured MCP server target
   /disconnect           Disconnect from the current MCP server target
+  /reload               Reconnect with the original client URL and model configuration
   /user                 User mode (default). Accept natural-language requests
   /developer            Developer mode. Accept <tool-name> {JSON} input and print full JSON responses
   /list-models          List configured LLM profiles as name, model, and provider
@@ -95,6 +97,10 @@ profile names.
 uses the configured URL. If the client is already connected, it disconnects first.
 The prompt and status header show the current MCP target URL, including after a
 failed `/connect` or after `/disconnect`.
+
+`/reload` disconnects the current session, restores the MCP target URL and
+active `/model` selection from the client configuration loaded at startup, and
+reconnects with that original state.
 
 Developer mode is intended for direct MCP/tool work. It expects explicit
 `<tool-name> {JSON}` input and prints the full JSON response without the
@@ -129,6 +135,7 @@ enum ClientCommand {
     Help,
     Connect(Option<String>),
     Disconnect,
+    Reload,
     ListModels,
     UserMode,
     DeveloperMode,
@@ -146,6 +153,13 @@ enum ClientCommand {
 struct ClientDefaults {
     server: String,
     username: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ReplClientConfiguration<'a> {
+    url: &'a str,
+    timeout: u64,
+    model: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -293,8 +307,11 @@ fn main() -> Result<()> {
     run_repl(
         &runtime,
         client,
-        &config.client.url,
-        config.client.timeout,
+        ReplClientConfiguration {
+            url: &config.client.url,
+            timeout: config.client.timeout,
+            model: default_model_name(&config.client.model),
+        },
         &defaults,
         &llms,
         &llm_probes,
@@ -371,8 +388,7 @@ fn strip_ansi_codes(text: &str) -> String {
 fn run_repl(
     runtime: &Runtime,
     mut client: Option<McpClient>,
-    configured_client_url: &str,
-    client_timeout: u64,
+    repl_configuration: ReplClientConfiguration<'_>,
     defaults: &ClientDefaults,
     llms: &HashMap<String, ConfiguredLlm>,
     llm_probes: &HashMap<String, LlmStatusProbe>,
@@ -386,7 +402,7 @@ fn run_repl(
     initialize_history(&mut editor)?;
     let mut mode = ClientMode::User;
     let available_models = llm_name_set(llm_names);
-    let mut current_client_url = configured_client_url.to_string();
+    let mut current_client_url = repl_configuration.url.to_string();
 
     loop {
         let prompt = render_prompt(
@@ -421,15 +437,15 @@ fn run_repl(
                             let model_reachable = runtime.block_on(active_model_reachable(
                                 llm_probes,
                                 active_model.as_deref(),
-                                client_timeout,
+                                repl_configuration.timeout,
                             ));
                             current_client_url =
-                                connect_url.unwrap_or_else(|| configured_client_url.to_string());
+                                connect_url.unwrap_or_else(|| repl_configuration.url.to_string());
                             connect_client(
                                 runtime,
                                 &mut client,
                                 &current_client_url,
-                                client_timeout,
+                                repl_configuration.timeout,
                                 version,
                                 active_model.as_deref(),
                                 model_reachable,
@@ -439,7 +455,7 @@ fn run_repl(
                             let model_reachable = runtime.block_on(active_model_reachable(
                                 llm_probes,
                                 active_model.as_deref(),
-                                client_timeout,
+                                repl_configuration.timeout,
                             ));
                             disconnect_client(
                                 runtime,
@@ -450,6 +466,17 @@ fn run_repl(
                                 model_reachable,
                             )?;
                         }
+                        Ok(ClientCommand::Reload) => reload_client(
+                            runtime,
+                            &mut client,
+                            &mut current_client_url,
+                            repl_configuration.url,
+                            repl_configuration.timeout,
+                            &mut active_model,
+                            repl_configuration.model,
+                            llm_probes,
+                            version,
+                        )?,
                         Ok(ClientCommand::ListModels) => {
                             println!("{}", format_list_models(llm_probes));
                         }
@@ -466,7 +493,7 @@ fn run_repl(
                             &mut active_model,
                             name,
                             llm_probes,
-                            client_timeout,
+                            repl_configuration.timeout,
                             llm_names,
                             version,
                             &current_client_url,
@@ -518,15 +545,15 @@ fn run_repl(
                         let model_reachable = runtime.block_on(active_model_reachable(
                             llm_probes,
                             active_model.as_deref(),
-                            client_timeout,
+                            repl_configuration.timeout,
                         ));
                         current_client_url =
-                            connect_url.unwrap_or_else(|| configured_client_url.to_string());
+                            connect_url.unwrap_or_else(|| repl_configuration.url.to_string());
                         connect_client(
                             runtime,
                             &mut client,
                             &current_client_url,
-                            client_timeout,
+                            repl_configuration.timeout,
                             version,
                             active_model.as_deref(),
                             model_reachable,
@@ -536,7 +563,7 @@ fn run_repl(
                         let model_reachable = runtime.block_on(active_model_reachable(
                             llm_probes,
                             active_model.as_deref(),
-                            client_timeout,
+                            repl_configuration.timeout,
                         ));
                         disconnect_client(
                             runtime,
@@ -547,6 +574,17 @@ fn run_repl(
                             model_reachable,
                         )?;
                     }
+                    Ok(ClientCommand::Reload) => reload_client(
+                        runtime,
+                        &mut client,
+                        &mut current_client_url,
+                        repl_configuration.url,
+                        repl_configuration.timeout,
+                        &mut active_model,
+                        repl_configuration.model,
+                        llm_probes,
+                        version,
+                    )?,
                     Ok(ClientCommand::ListModels) => println!("{}", format_list_models(llm_probes)),
                     Ok(ClientCommand::UserMode) => {
                         mode = ClientMode::User;
@@ -561,7 +599,7 @@ fn run_repl(
                         &mut active_model,
                         name,
                         llm_probes,
-                        client_timeout,
+                        repl_configuration.timeout,
                         llm_names,
                         version,
                         &current_client_url,
@@ -997,6 +1035,7 @@ fn parse_input(
         "/help" => Ok(ClientCommand::Help),
         "/connect" => Ok(ClientCommand::Connect(None)),
         "/disconnect" => Ok(ClientCommand::Disconnect),
+        "/reload" => Ok(ClientCommand::Reload),
         "/list-models" => Ok(ClientCommand::ListModels),
         "/user" => Ok(ClientCommand::UserMode),
         "/developer" => Ok(ClientCommand::DeveloperMode),
@@ -1422,6 +1461,39 @@ fn connect_client(
     Ok(())
 }
 
+fn reload_client(
+    runtime: &Runtime,
+    client: &mut Option<McpClient>,
+    current_client_url: &mut String,
+    configured_client_url: &str,
+    client_timeout: u64,
+    active_model: &mut Option<String>,
+    configured_model: Option<&str>,
+    llm_probes: &HashMap<String, LlmStatusProbe>,
+    version: &str,
+) -> Result<()> {
+    *current_client_url = configured_client_url.to_string();
+    *active_model = configured_model.map(ToOwned::to_owned);
+
+    let model_reachable = runtime.block_on(active_model_reachable(
+        llm_probes,
+        active_model.as_deref(),
+        client_timeout,
+    ));
+
+    connect_client(
+        runtime,
+        client,
+        current_client_url,
+        client_timeout,
+        version,
+        active_model.as_deref(),
+        model_reachable,
+    )?;
+    println!("Restored the original client configuration.");
+    Ok(())
+}
+
 fn disconnect_client(
     runtime: &Runtime,
     client: &mut Option<McpClient>,
@@ -1777,6 +1849,10 @@ mod tests {
         assert_eq!(
             parse_input("/disconnect", &tools, &models, false, ClientMode::User).unwrap(),
             ClientCommand::Disconnect
+        );
+        assert_eq!(
+            parse_input("/reload", &tools, &models, false, ClientMode::User).unwrap(),
+            ClientCommand::Reload
         );
         assert_eq!(
             parse_input("/list-models", &tools, &models, false, ClientMode::User).unwrap(),
@@ -2319,6 +2395,7 @@ mod tests {
                 "/list-models",
                 "/model",
                 "/quit",
+                "/reload",
                 "/tools",
                 "/user",
             ]

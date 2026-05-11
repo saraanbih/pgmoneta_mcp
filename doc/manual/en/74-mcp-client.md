@@ -98,14 +98,15 @@ The startup header shows the current MCP target URL and active model profile.
 The MCP line uses a green tick or red cross based on MCP server reachability,
 while the model line uses its own green tick or red cross based on active model
 endpoint reachability. The same header is refreshed after `/connect`,
-`/disconnect`, and `/model [name]`. The prompt follows the same current MCP
-target URL, even after a failed `/connect` or after `/disconnect`.
+`/disconnect`, `/reload`, and `/model [name]`. The prompt follows the same
+current MCP target URL, even after a failed `/connect` or after `/disconnect`.
 
 ## Commands
 
 ```text
 /connect [url]        Connect to [url] or the configured MCP server target
 /disconnect           Disconnect from the current MCP server target
+/reload               Reconnect with the original client URL and model configuration
 /list-models          List configured LLM profiles in a table
 /model
 /model gemma
@@ -128,6 +129,10 @@ optional fields can be skipped by pressing Enter.
 the client reconnects to the configured target from
 `pgmoneta-mcp-client.conf`. If the client is already connected, it disconnects
 before reconnecting.
+
+`/reload` disconnects the current session, restores the MCP target URL and
+active `/model` selection from the client configuration loaded at startup, and
+reconnects with that original state.
 
 `/list-models` prints the configured LLM profiles as an aligned table with the
 columns `Name`, `Model`, and `Provider`.
@@ -162,6 +167,7 @@ Examples:
 admin@localhost:8000/mcp$ /disconnect
 admin@localhost:8000/mcp$ /connect
 admin@localhost:8000/mcp$ /connect http://localhost:8200/mcp
+admin@localhost:8200/mcp$ /reload
 admin@localhost:8200/mcp$ /disconnect
 admin@localhost:8200/mcp$ /connect
 admin@localhost:8000/mcp$ /list-models
