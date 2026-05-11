@@ -481,7 +481,9 @@ reconnects with that original state.
 The interactive prompt uses readline-style editing, explicit Home/End line
 navigation, slash-command Tab completion, `/model [name]` Tab completion based
 on configured LLM profile names, and history navigation, and persists the latest
-1000 commands in `~/.pgmoneta-mcp/pgmoneta-mcp-client.history`.
+1000 commands in `~/.pgmoneta-mcp/pgmoneta-mcp-client.history`. Press Ctrl+C
+once to display `Press Ctrl+c again to quit`; press Ctrl+C again within 2
+seconds to exit, otherwise the pending quit state resets automatically.
 
 `/list-models` prints the configured LLM profiles as an aligned table with the
 columns `Name`, `Model`, and `Provider`.

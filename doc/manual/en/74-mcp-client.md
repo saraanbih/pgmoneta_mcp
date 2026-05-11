@@ -156,7 +156,9 @@ completion, so typing `/ex` and pressing Tab completes to `/exit`. The `/model`
 command also supports Tab completion for configured LLM profile names. Command
 history is loaded from and saved to
 `~/.pgmoneta-mcp/pgmoneta-mcp-client.history`, and the client keeps at most the
-latest 1000 entries. Tool errors are printed in the session and do not
+latest 1000 entries. Press Ctrl+C once to display `Press Ctrl+c again to quit`;
+press Ctrl+C again within 2 seconds to exit, otherwise the pending quit state is
+cleared automatically. Tool errors are printed in the session and do not
 terminate the client. When a tool response is JSON, the client pretty-prints it
 and translates known pgmoneta fields such as file sizes, LSNs, compression,
 encryption, command codes, and error codes into more readable values.

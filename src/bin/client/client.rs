@@ -38,13 +38,16 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
 
 const DEFAULT_CONF: &str = "/etc/pgmoneta-mcp/pgmoneta-mcp-client.conf";
 const HISTORY_DIR: &str = ".pgmoneta-mcp";
 const HISTORY_FILE: &str = "pgmoneta-mcp-client.history";
 const HISTORY_MAX_ENTRIES: usize = 1000;
+const CTRL_C_EXIT_TIMEOUT: Duration = Duration::from_secs(2);
 const CLIENT_NAME: &str = "pgmoneta MCP client";
+const CTRL_C_EXIT_MESSAGE: &str = "Press Ctrl+c again to quit";
 const MODEL_COMMAND: &str = "/model";
 const MODEL_COMMAND_PREFIX: &str = "/model ";
 const SLASH_COMMANDS: &[&str] = &[
@@ -108,7 +111,9 @@ human-readable translation used in user mode.
 
 The input line supports readline-style history and editing shortcuts such as
 arrow history navigation, Home/End, Ctrl+A/E, Ctrl+B/F, Ctrl+R, and Ctrl+U/K.
-Command history is persisted in ~/.pgmoneta-mcp/pgmoneta-mcp-client.history.";
+Press Ctrl+C once to arm exit and show a confirmation message; press Ctrl+C
+again within 2 seconds to quit. Command history is persisted in
+~/.pgmoneta-mcp/pgmoneta-mcp-client.history.";
 
 #[derive(Debug, Parser)]
 #[command(
@@ -174,9 +179,38 @@ struct ClientHelper {
     llm_names: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InterruptAction {
+    Continue,
+    Exit,
+}
+
+#[derive(Debug, Default)]
+struct InterruptState {
+    last_interrupt: Option<Instant>,
+}
+
 impl ClientHelper {
     fn new(llm_names: Vec<String>) -> Self {
         Self { llm_names }
+    }
+}
+
+impl InterruptState {
+    fn reset(&mut self) {
+        self.last_interrupt = None;
+    }
+
+    fn handle_interrupt(&mut self, now: Instant) -> InterruptAction {
+        if let Some(last_interrupt) = self.last_interrupt
+            && now.duration_since(last_interrupt) <= CTRL_C_EXIT_TIMEOUT
+        {
+            self.last_interrupt = None;
+            return InterruptAction::Exit;
+        }
+
+        self.last_interrupt = Some(now);
+        InterruptAction::Continue
     }
 }
 
@@ -403,6 +437,7 @@ fn run_repl(
     let mut mode = ClientMode::User;
     let available_models = llm_name_set(llm_names);
     let mut current_client_url = repl_configuration.url.to_string();
+    let mut interrupt_state = InterruptState::default();
 
     loop {
         let prompt = render_prompt(
@@ -411,6 +446,7 @@ fn run_repl(
         );
         match editor.readline(&prompt) {
             Ok(line) => {
+                interrupt_state.reset();
                 let line = line.trim();
                 if line.is_empty() {
                     continue;
@@ -650,8 +686,13 @@ fn run_repl(
                 }
             }
             Err(ReadlineError::Interrupted) => {
-                println!();
-                continue;
+                match interrupt_state.handle_interrupt(Instant::now()) {
+                    InterruptAction::Continue => {
+                        println!("{CTRL_C_EXIT_MESSAGE}");
+                        continue;
+                    }
+                    InterruptAction::Exit => break,
+                }
             }
             Err(ReadlineError::Eof) => {
                 println!();
@@ -1952,6 +1993,52 @@ mod tests {
                 name: "list_backups".to_string(),
                 args: HashMap::from([("server".to_string(), json!("primary"))]),
             }
+        );
+    }
+
+    #[test]
+    fn test_interrupt_requires_second_ctrl_c_within_timeout() {
+        let mut interrupt_state = InterruptState::default();
+        let now = Instant::now();
+
+        assert_eq!(
+            interrupt_state.handle_interrupt(now),
+            InterruptAction::Continue
+        );
+        assert_eq!(
+            interrupt_state.handle_interrupt(now + Duration::from_secs(1)),
+            InterruptAction::Exit
+        );
+    }
+
+    #[test]
+    fn test_interrupt_resets_after_timeout() {
+        let mut interrupt_state = InterruptState::default();
+        let now = Instant::now();
+
+        assert_eq!(
+            interrupt_state.handle_interrupt(now),
+            InterruptAction::Continue
+        );
+        assert_eq!(
+            interrupt_state.handle_interrupt(now + Duration::from_secs(3)),
+            InterruptAction::Continue
+        );
+    }
+
+    #[test]
+    fn test_interrupt_reset_clears_pending_exit() {
+        let mut interrupt_state = InterruptState::default();
+        let now = Instant::now();
+
+        assert_eq!(
+            interrupt_state.handle_interrupt(now),
+            InterruptAction::Continue
+        );
+        interrupt_state.reset();
+        assert_eq!(
+            interrupt_state.handle_interrupt(now + Duration::from_secs(1)),
+            InterruptAction::Continue
         );
     }
 
