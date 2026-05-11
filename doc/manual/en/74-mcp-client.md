@@ -97,13 +97,14 @@ admin@localhost:8000/mcp$
 The startup header shows the current MCP target URL and active model profile.
 The MCP line uses a green tick or red cross based on MCP server reachability,
 while the model line uses its own green tick or red cross based on active model
-endpoint reachability. The same header is refreshed after `/connect`,
+endpoint reachability. The same header is refreshed after `/clear`, `/connect`,
 `/disconnect`, `/reload`, and `/model [name]`. The prompt follows the same
 current MCP target URL, even after a failed `/connect` or after `/disconnect`.
 
 ## Commands
 
 ```text
+/clear                Clear the terminal and reprint the status header
 /connect [url]        Connect to [url] or the configured MCP server target
 /disconnect           Disconnect from the current MCP server target
 /reload               Reconnect with the original client URL and model configuration
@@ -133,6 +134,9 @@ before reconnecting.
 `/reload` disconnects the current session, restores the MCP target URL and
 active `/model` selection from the client configuration loaded at startup, and
 reconnects with that original state.
+
+`/clear` clears the current terminal when the client is attached to a real
+terminal and then reprints the current status header.
 
 `/list-models` prints the configured LLM profiles as an aligned table with the
 columns `Name`, `Model`, and `Provider`.
@@ -166,6 +170,7 @@ encryption, command codes, and error codes into more readable values.
 Examples:
 
 ```bash
+admin@localhost:8000/mcp$ /clear
 admin@localhost:8000/mcp$ /disconnect
 admin@localhost:8000/mcp$ /connect
 admin@localhost:8000/mcp$ /connect http://localhost:8200/mcp

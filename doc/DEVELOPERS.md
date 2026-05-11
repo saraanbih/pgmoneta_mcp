@@ -449,13 +449,14 @@ admin@localhost:8000/mcp$
 The startup header shows the current MCP target URL and active model profile.
 The MCP line reflects MCP server reachability, while the model line reflects
 the active model endpoint reachability. Each line uses a green tick or red
-cross independently. The header is refreshed after `/connect`, `/disconnect`,
-`/reload`, and `/model [name]`. The prompt follows the same current MCP target
-URL, even after a failed `/connect` or after `/disconnect`.
+cross independently. The header is refreshed after `/clear`, `/connect`,
+`/disconnect`, `/reload`, and `/model [name]`. The prompt follows the same
+current MCP target URL, even after a failed `/connect` or after `/disconnect`.
 
 Inside the shell:
 
 ```text
+/clear
 /connect
 /connect http://localhost:8200/mcp
 /disconnect
@@ -477,6 +478,9 @@ the client is already connected, it disconnects before reconnecting.
 `/reload` disconnects the current session, restores the MCP target URL and
 active `/model` selection from the client configuration loaded at startup, and
 reconnects with that original state.
+
+`/clear` clears the current terminal when the client is attached to a real
+terminal and then reprints the current status header.
 
 The interactive prompt uses readline-style editing, explicit Home/End line
 navigation, slash-command Tab completion, `/model [name]` Tab completion based

@@ -53,6 +53,7 @@ const CTRL_C_EXIT_MESSAGE: &str = "Press Ctrl+c again to quit";
 const MODEL_COMMAND: &str = "/model";
 const MODEL_COMMAND_PREFIX: &str = "/model ";
 const SLASH_COMMANDS: &[&str] = &[
+    "/clear",
     "/connect",
     "/developer",
     "/disconnect",
@@ -75,6 +76,7 @@ Requests to backup a server, such as `Backup primary server` will call the `back
 const HELP_TEXT: &str = "\
 Basic usage:
   /help                 Show this help
+  /clear                Clear the terminal and reprint the status header
   /connect [url]        Connect to [url] or the configured MCP server target
   /disconnect           Disconnect from the current MCP server target
   /reload               Reconnect with the original client URL and model configuration
@@ -97,6 +99,9 @@ matching JSON arguments before executing it.
 Use `/model` to show the current LLM profile and `/model <name>` to switch to
 another configured profile. Press Tab after `/model ` to complete the available
 profile names.
+
+Use `/clear` to clear the current terminal when the client is attached to a
+real terminal and then reprint the current status header.
 
 `/connect [url]` switches the current MCP target. If you omit `[url]`, the client
 uses the configured URL. If the client is already connected, it disconnects first.
@@ -140,6 +145,7 @@ struct Args {
 #[derive(Debug, PartialEq)]
 enum ClientCommand {
     Help,
+    Clear,
     Connect(Option<String>),
     Disconnect,
     Reload,
@@ -484,6 +490,15 @@ fn run_repl(
                         mode,
                     ) {
                         Ok(ClientCommand::Help) => println!("{HELP_TEXT}"),
+                        Ok(ClientCommand::Clear) => clear_and_print_header(
+                            runtime,
+                            llm_probes,
+                            repl_configuration.timeout,
+                            version,
+                            &current_client_url,
+                            client.is_some(),
+                            active_model.as_deref(),
+                        )?,
                         Ok(ClientCommand::Connect(connect_url)) => {
                             let model_reachable = runtime.block_on(active_model_reachable(
                                 llm_probes,
@@ -592,6 +607,15 @@ fn run_repl(
                     mode,
                 ) {
                     Ok(ClientCommand::Help) => println!("{HELP_TEXT}"),
+                    Ok(ClientCommand::Clear) => clear_and_print_header(
+                        runtime,
+                        llm_probes,
+                        repl_configuration.timeout,
+                        version,
+                        &current_client_url,
+                        client.is_some(),
+                        active_model.as_deref(),
+                    )?,
                     Ok(ClientCommand::Connect(connect_url)) => {
                         let model_reachable = runtime.block_on(active_model_reachable(
                             llm_probes,
@@ -1089,6 +1113,7 @@ fn parse_input(
 
     match trimmed {
         "/help" => Ok(ClientCommand::Help),
+        "/clear" => Ok(ClientCommand::Clear),
         "/connect" => Ok(ClientCommand::Connect(None)),
         "/disconnect" => Ok(ClientCommand::Disconnect),
         "/reload" => Ok(ClientCommand::Reload),
@@ -1406,15 +1431,12 @@ fn handle_model_command(
                 active_model.as_deref(),
                 client_timeout,
             ));
-            println!(
-                "{}",
-                startup_banner(
-                    version,
-                    client_url,
-                    connected,
-                    active_model.as_deref(),
-                    model_reachable,
-                )
+            print_status_header(
+                version,
+                client_url,
+                connected,
+                active_model.as_deref(),
+                model_reachable,
             );
         }
         None => println!(
@@ -1500,16 +1522,10 @@ fn connect_client(
     match runtime.block_on(McpClient::connect(client_url, client_timeout)) {
         Ok(active_client) => {
             *client = Some(active_client);
-            println!(
-                "{}",
-                startup_banner(version, client_url, true, active_model, model_reachable)
-            );
+            print_status_header(version, client_url, true, active_model, model_reachable);
         }
         Err(_) => {
-            println!(
-                "{}",
-                startup_banner(version, client_url, false, active_model, model_reachable)
-            );
+            print_status_header(version, client_url, false, active_model, model_reachable);
         }
     }
     Ok(())
@@ -1562,11 +1578,54 @@ fn disconnect_client(
 
     runtime.block_on(active_client.cleanup())?;
     println!("Disconnected.");
-    println!(
-        "{}",
-        startup_banner(version, client_url, false, active_model, model_reachable)
+    print_status_header(version, client_url, false, active_model, model_reachable);
+    Ok(())
+}
+
+fn clear_and_print_header(
+    runtime: &Runtime,
+    llm_probes: &HashMap<String, LlmStatusProbe>,
+    client_timeout: u64,
+    version: &str,
+    client_url: &str,
+    connected: bool,
+    active_model: Option<&str>,
+) -> Result<()> {
+    let model_reachable = runtime.block_on(active_model_reachable(
+        llm_probes,
+        active_model,
+        client_timeout,
+    ));
+    let mut stdout = io::stdout();
+    let is_terminal = stdout.is_terminal();
+    clear_startup_terminal(&mut stdout, is_terminal).context("Failed to clear terminal")?;
+    print_status_header(
+        version,
+        client_url,
+        connected,
+        active_model,
+        model_reachable,
     );
     Ok(())
+}
+
+fn print_status_header(
+    version: &str,
+    client_url: &str,
+    connected: bool,
+    active_model: Option<&str>,
+    model_reachable: bool,
+) {
+    println!(
+        "{}",
+        startup_banner(
+            version,
+            client_url,
+            connected,
+            active_model,
+            model_reachable
+        )
+    );
 }
 
 async fn active_model_reachable(
@@ -1883,6 +1942,10 @@ mod tests {
         assert_eq!(
             parse_input("/help", &tools, &models, false, ClientMode::User).unwrap(),
             ClientCommand::Help
+        );
+        assert_eq!(
+            parse_input("/clear", &tools, &models, false, ClientMode::User).unwrap(),
+            ClientCommand::Clear
         );
         assert_eq!(
             parse_input("/connect", &tools, &models, false, ClientMode::User).unwrap(),
@@ -2504,6 +2567,7 @@ mod tests {
         assert_eq!(
             replacements,
             vec![
+                "/clear",
                 "/connect",
                 "/developer",
                 "/disconnect",

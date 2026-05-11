@@ -79,12 +79,13 @@ to enter its interactive mode. Use `/model` to inspect the active profile and
 after `/model ` to complete the available profile names. The client header shows
 the current MCP target URL and active profile, with independent green tick /
 red cross indicators for MCP reachability and active model endpoint
-reachability. `/connect [url]` can switch the current MCP target URL at
-runtime, while `/connect` without a URL resets it to the configured default.
-`/reload` disconnects the current session, restores both the original MCP URL
-and the startup `/model` selection, and reconnects with that configuration.
-Use `/list-models` to print the configured client profiles as an aligned table
-with `Name`, `Model`, and `Provider` columns.
+reachability. `/clear` clears the current terminal when the client is attached
+to a real terminal and then reprints that header. `/connect [url]` can switch
+the current MCP target URL at runtime, while `/connect` without a URL resets it
+to the configured default. `/reload` disconnects the current session, restores
+both the original MCP URL and the startup `/model` selection, and reconnects
+with that configuration. Use `/list-models` to print the configured client
+profiles as an aligned table with `Name`, `Model`, and `Provider` columns.
 
 ## Ollama
 
