@@ -1495,13 +1495,11 @@ fn connect_client(
 ) -> Result<()> {
     if let Some(active_client) = client.take() {
         runtime.block_on(active_client.cleanup())?;
-        println!("Disconnected.");
     }
 
     match runtime.block_on(McpClient::connect(client_url, client_timeout)) {
         Ok(active_client) => {
             *client = Some(active_client);
-            println!("Connected to {client_url}.");
             println!(
                 "{}",
                 startup_banner(version, client_url, true, active_model, model_reachable)
@@ -1546,7 +1544,6 @@ fn reload_client(
         active_model.as_deref(),
         model_reachable,
     )?;
-    println!("Restored the original client configuration.");
     Ok(())
 }
 
