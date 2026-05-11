@@ -264,13 +264,12 @@ fn main() -> Result<()> {
         username: select_username(&args.users)?,
     };
     let runtime = Runtime::new().context("Failed to create Tokio runtime")?;
-    let client = match runtime.block_on(McpClient::connect(
-        &config.client.url,
-        config.client.timeout,
-    )) {
-        Ok(client) => Some(client),
-        Err(_) => None,
-    };
+    let client = runtime
+        .block_on(McpClient::connect(
+            &config.client.url,
+            config.client.timeout,
+        ))
+        .ok();
     let active_model = default_model_name(&config.client.model).map(ToOwned::to_owned);
     let model_reachable = runtime.block_on(active_model_reachable(
         &llm_probes,
@@ -704,10 +703,10 @@ fn is_slash_command_prefix(input: &str) -> bool {
 }
 
 fn model_completion_prefix(input: &str) -> Option<(usize, &str)> {
-    if let Some(model_prefix) = input.strip_prefix(MODEL_COMMAND_PREFIX) {
-        if !model_prefix.chars().any(char::is_whitespace) {
-            return Some((MODEL_COMMAND_PREFIX.len(), model_prefix));
-        }
+    if let Some(model_prefix) = input.strip_prefix(MODEL_COMMAND_PREFIX)
+        && !model_prefix.chars().any(char::is_whitespace)
+    {
+        return Some((MODEL_COMMAND_PREFIX.len(), model_prefix));
     }
 
     None
