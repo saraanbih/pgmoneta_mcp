@@ -53,7 +53,7 @@ const CLIENT_NAME: &str = "pgmoneta MCP client";
 const CLIENT_TITLE_LABEL: &str = "pgmoneta MCP/client";
 const CLEAR_TERMINAL_SEQUENCE: &str = "\x1b[2J\x1b[H";
 const CTRL_C_EXIT_MESSAGE: &str = "Press Ctrl+c again to quit";
-const LOGO_ART_COLOR: &str = "\x1b[38;5;208m";
+const LOGO_ART_COLOR: &str = "\x1b[38;5;202m";
 const ANSI_RESET: &str = "\x1b[0m";
 const CLIENT_LOGO_ART: &[&str] = &[
     " ▄▄▀███▄▄▄▄",
