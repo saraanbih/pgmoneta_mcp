@@ -489,6 +489,10 @@ on configured LLM profile names, and history navigation, and persists the latest
 once to display `Press Ctrl+c again to quit`; press Ctrl+C again within 2
 seconds to exit, otherwise the pending quit state resets automatically.
 
+Non-empty input lines are recorded in history as entered. If the first
+non-whitespace character is `#`, the line is treated as a comment, is still
+recorded in history, does not execute, and immediately shows a fresh prompt.
+
 `/list-models` prints the configured LLM profiles as an aligned table with the
 columns `Name`, `Model`, and `Provider`.
 

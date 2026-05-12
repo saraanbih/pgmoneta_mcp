@@ -171,6 +171,10 @@ explicit tool call such as `list_backups {"server":"primary"}`, and the client
 prints the full JSON response instead of the human-readable translation used in
 user mode.
 
+Non-empty input lines are recorded in history as entered. If the first
+non-whitespace character is `#`, the line is treated as a comment, is still
+recorded in history, does not execute, and immediately shows a fresh prompt.
+
 The shell uses readline-style editing, so standard history and cursor shortcuts
 such as Arrow Up / Down, Home / End, Ctrl+A / E, Ctrl+B / F, Ctrl+R, Ctrl+U / K,
 and Ctrl+Y work directly in the input prompt. Slash commands support Tab

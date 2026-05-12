@@ -136,6 +136,10 @@ Developer mode is intended for direct MCP/tool work. It expects explicit
 `<tool-name> {JSON}` input and prints the full JSON response without the
 human-readable translation used in user mode.
 
+Non-empty input lines are recorded in history as entered. If the first
+non-whitespace character is `#`, the line is treated as a comment and ignored
+for execution.
+
 The input line supports readline-style history and editing shortcuts such as
 arrow history navigation, Home/End, Ctrl+A/E, Ctrl+B/F, Ctrl+R, and Ctrl+U/K.
 Press Ctrl+C once to arm exit and show a confirmation message; press Ctrl+C
@@ -567,17 +571,19 @@ fn run_repl(
         match editor.readline(&prompt) {
             Ok(line) => {
                 interrupt_state.reset();
+                let Some(history_line) = history_entry(&line) else {
+                    continue;
+                };
+                editor
+                    .add_history_entry(history_line)
+                    .map_err(|e| anyhow!("Failed to add history entry: {}", e))?;
+                save_history(&mut editor)?;
                 let line = line.trim();
-                if line.is_empty() {
+                if is_comment_input(line) {
                     continue;
                 }
 
                 set_client_terminal_title(Some(line));
-
-                editor
-                    .add_history_entry(line)
-                    .map_err(|e| anyhow!("Failed to add history entry: {}", e))?;
-                save_history(&mut editor)?;
 
                 if line.starts_with('/') {
                     match parse_input(
@@ -1281,6 +1287,14 @@ fn parse_input(
         _ if trimmed.starts_with('/') => Err(anyhow!("Unknown command '{}'", trimmed)),
         _ => parse_mode_input(trimmed, available_tools, llm_enabled, mode),
     }
+}
+
+fn is_comment_input(input: &str) -> bool {
+    input.trim_start().starts_with('#')
+}
+
+fn history_entry(input: &str) -> Option<&str> {
+    (!input.trim().is_empty()).then_some(input)
 }
 
 fn parse_connect_command(input: &str) -> Result<ClientCommand> {
@@ -2175,6 +2189,27 @@ mod tests {
             parse_input("/model qwen", &tools, &models, true, ClientMode::User).unwrap(),
             ClientCommand::Model(Some("qwen".to_string()))
         );
+    }
+
+    #[test]
+    fn test_comment_input_uses_first_non_whitespace_character() {
+        assert!(is_comment_input("# ignore this line"));
+        assert!(is_comment_input("#/help"));
+        assert!(is_comment_input(" # not a comment"));
+        assert!(is_comment_input("\t\t# tab-indented comment"));
+        assert!(!is_comment_input("list backups # inline note"));
+        assert!(!is_comment_input(""));
+    }
+
+    #[test]
+    fn test_history_entry_preserves_original_non_empty_input() {
+        assert_eq!(history_entry("/tools"), Some("/tools"));
+        assert_eq!(
+            history_entry("      # My comment"),
+            Some("      # My comment")
+        );
+        assert_eq!(history_entry("   "), None);
+        assert_eq!(history_entry(""), None);
     }
 
     #[test]
