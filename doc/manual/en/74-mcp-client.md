@@ -148,6 +148,24 @@ tool, and then executes that tool with the generated JSON arguments. For
 example, `List backups on primary server` maps to
 `list_backups {"server":"primary"}` before execution.
 
+The `metric` tool accepts a metric name and optional label filters as JSON. Use
+`attributes` to match Prometheus labels exactly:
+
+```text
+metric {"name":"pgmoneta_version"}
+metric {"name":"pgmoneta_retention_server","attributes":{"server":"primary"}}
+metric {"name":"pgmoneta_retention_server","labels":{"server":"primary"}}
+```
+
+`attributes` and `labels` are equivalent aliases; provide only one of them. If
+you omit the filter object, the tool returns all matching metric samples. In
+user mode, a single matching metric is shown as just its value. In developer
+mode, the full Prometheus sample line is printed, for example:
+
+```text
+pgmoneta_version{version="0.22.0"} 1
+```
+
 Use `/developer` to switch to developer mode. In this mode the input must be an
 explicit tool call such as `list_backups {"server":"primary"}`, and the client
 prints the full JSON response instead of the human-readable translation used in
@@ -182,6 +200,8 @@ admin@localhost:8000/mcp$ /user
 admin@localhost:8000/mcp$ /model
 admin@localhost:8000/mcp$ /model gemma
 admin@localhost:8000/mcp$ List backups on primary server
+admin@localhost:8000/mcp$ metric {"name":"pgmoneta_version"}
 admin@localhost:8000/mcp$ /developer
 admin@localhost:8000/mcp$ list_backups {"server":"primary"}
+admin@localhost:8000/mcp# metric {"name":"pgmoneta_retention_server","attributes":{"server":"primary"}}
 ```

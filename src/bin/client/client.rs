@@ -96,6 +96,12 @@ also enter natural-language requests such as `List backups on primary server`.
 The client asks the LLM to select one of the tools from `/tools` and build the
 matching JSON arguments before executing it.
 
+Metric queries use the `metric` tool with JSON arguments such as
+`metric {\"name\":\"pgmoneta_version\"}` or
+`metric {\"name\":\"pgmoneta_retention_server\",\"attributes\":{\"server\":\"primary\"}}`.
+Use `attributes` (or `labels`) to filter Prometheus labels. If omitted, all
+matching metric samples are returned.
+
 Use `/model` to show the current LLM profile and `/model <name>` to switch to
 another configured profile. Press Tab after `/model ` to complete the available
 profile names.
@@ -880,6 +886,30 @@ fn format_tool_result_developer(result: &CallToolResult) -> Result<String> {
     format_pretty_json(result, "tool result")
 }
 
+fn format_metric_tool_result(result: &CallToolResult) -> Result<String> {
+    let Some(text) = metric_tool_text(result) else {
+        return format_tool_result(result);
+    };
+
+    if text.lines().count() > 1 {
+        return Ok(text);
+    }
+
+    if let Some(value) = metric_sample_value(text.trim()) {
+        return Ok(value.to_string());
+    }
+
+    Ok(text)
+}
+
+fn format_metric_tool_result_developer(result: &CallToolResult) -> Result<String> {
+    let Some(text) = metric_tool_text(result) else {
+        return format_tool_result_developer(result);
+    };
+
+    Ok(text)
+}
+
 fn extract_text_content(result: &CallToolResult) -> Option<String> {
     let mut texts = Vec::with_capacity(result.content.len());
 
@@ -891,11 +921,37 @@ fn extract_text_content(result: &CallToolResult) -> Option<String> {
     Some(texts.join("\n"))
 }
 
+fn metric_tool_text(result: &CallToolResult) -> Option<String> {
+    let text = extract_text_content(result)?;
+
+    match serde_json::from_str::<Value>(&text) {
+        Ok(Value::String(sample)) => Some(sample),
+        _ => Some(text),
+    }
+}
+
 fn format_text_response(text: &str) -> Result<String> {
     match serde_json::from_str::<Value>(text) {
         Ok(value) => format_json_value(value, "JSON response"),
         Err(_) => Ok(text.to_string()),
     }
+}
+
+fn metric_sample_value(sample: &str) -> Option<&str> {
+    let mut in_braces = false;
+
+    for (idx, ch) in sample.char_indices() {
+        match ch {
+            '{' => in_braces = true,
+            '}' => in_braces = false,
+            ch if ch.is_whitespace() && !in_braces => {
+                return sample[idx..].split_whitespace().next();
+            }
+            _ => {}
+        }
+    }
+
+    None
 }
 
 fn format_json_value(value: Value, label: &str) -> Result<String> {
@@ -1296,10 +1352,22 @@ fn execute_tool_command(
         }
     }
 
-    match runtime.block_on(client.call_tool(name, args)) {
+    match runtime.block_on(client.call_tool(name.clone(), args)) {
         Ok(result) => match mode {
-            ClientMode::User => println!("{}", format_tool_result(&result)?),
-            ClientMode::Developer => println!("{}", format_tool_result_developer(&result)?),
+            ClientMode::User => {
+                if name == "metric" {
+                    println!("{}", format_metric_tool_result(&result)?);
+                } else {
+                    println!("{}", format_tool_result(&result)?);
+                }
+            }
+            ClientMode::Developer => {
+                if name == "metric" {
+                    println!("{}", format_metric_tool_result_developer(&result)?);
+                } else {
+                    println!("{}", format_tool_result_developer(&result)?);
+                }
+            }
         },
         Err(error) => eprintln!("{}", format_runtime_error(&error)),
     }
@@ -2850,6 +2918,54 @@ mod tests {
         assert_eq!(parsed, json!({"status":"ok","count":1}));
         assert!(formatted.contains('\n'));
         assert!(formatted.contains("    \""));
+    }
+
+    #[test]
+    fn test_format_metric_tool_result_extracts_value_for_user_mode() {
+        let result = CallToolResult::success(vec![
+            RawContent::text(r#"pgmoneta_version{version="0.22.0"} 1"#).no_annotation(),
+        ]);
+
+        assert_eq!(format_metric_tool_result(&result).unwrap(), "1");
+    }
+
+    #[test]
+    fn test_format_metric_tool_result_preserves_multiple_metric_lines() {
+        let result = CallToolResult::success(vec![
+            RawContent::text(
+                "pgmoneta_retention_server{server=\"primary\"} 7\npgmoneta_retention_server{server=\"standby\"} 14",
+            )
+            .no_annotation(),
+        ]);
+
+        assert_eq!(
+            format_metric_tool_result(&result).unwrap(),
+            "pgmoneta_retention_server{server=\"primary\"} 7\npgmoneta_retention_server{server=\"standby\"} 14"
+        );
+    }
+
+    #[test]
+    fn test_format_tool_result_developer_preserves_full_metric_line() {
+        let result = CallToolResult::success(vec![
+            RawContent::text(r#"pgmoneta_version{version="0.22.0"} 1"#).no_annotation(),
+        ]);
+
+        assert_eq!(
+            format_tool_result_developer(&result).unwrap(),
+            r#"pgmoneta_version{version="0.22.0"} 1"#
+        );
+    }
+
+    #[test]
+    fn test_format_metric_tool_result_developer_unescapes_json_string_metric_line() {
+        let result = CallToolResult::success(vec![
+            RawContent::text(r#""pgmoneta_version{version=\"0.22.0\"} 1""#).no_annotation(),
+        ]);
+
+        assert_eq!(
+            format_metric_tool_result_developer(&result).unwrap(),
+            r#"pgmoneta_version{version="0.22.0"} 1"#
+        );
     }
 
     #[test]

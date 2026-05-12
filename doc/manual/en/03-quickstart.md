@@ -90,6 +90,7 @@ log_path = /tmp/pgmoneta_mcp.log
 [pgmoneta]
 host = localhost
 port = 5000
+metrics = 5001
 ```
 
 **Configuration options**:
@@ -101,6 +102,7 @@ port = 5000
 - `[pgmoneta]` section:
   - `host`: Hostname where pgmoneta server is running
   - `port`: Management port of pgmoneta server (must match pgmoneta's `management` setting)
+  - `metrics`: Prometheus metrics port of pgmoneta server (defaults to `5001`)
 
 See the **Configuration** chapter for all configuration options.
 

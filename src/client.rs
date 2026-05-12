@@ -18,13 +18,14 @@ mod compression;
 mod conf;
 mod encryption;
 mod info;
+mod metrics;
 mod mode;
 mod retention;
 mod shutdown;
 mod verify;
 
 use super::compression::CompressionUtil;
-use super::configuration::CONFIG;
+use super::configuration::{CONFIG, Configuration};
 use super::constant::*;
 use super::security::SecurityUtil;
 use anyhow::anyhow;
@@ -94,6 +95,17 @@ where
 pub struct PgmonetaClient;
 impl PgmonetaClient {
     const MAX_FRAME_LEN: usize = 64 * 1024 * 1024;
+
+    fn ensure_admin_user(config: &Configuration, username: &str) -> anyhow::Result<()> {
+        if !config.admins.contains_key(username) {
+            return Err(anyhow!(
+                "Unable to find configured pgmoneta admin user '{}'",
+                username
+            ));
+        }
+
+        Ok(())
+    }
 
     fn is_known_compression(value: u8) -> bool {
         matches!(
@@ -173,11 +185,7 @@ impl PgmonetaClient {
         let config = CONFIG.get().expect("Configuration should be enabled");
         let security_util = SecurityUtil::new();
 
-        if !config.admins.contains_key(username) {
-            return Err(anyhow!(
-                "request_backup_info: unable to find user {username}"
-            ));
-        }
+        Self::ensure_admin_user(config, username)?;
 
         let password_encrypted = config
             .admins
@@ -442,6 +450,7 @@ mod tests {
                 pgmoneta: PgmonetaConfiguration {
                     host: "127.0.0.1".to_string(),
                     port: 5001,
+                    metrics: 5002,
                     compression: "zstd".to_string(),
                     encryption: "aes_256_gcm".to_string(),
                 },

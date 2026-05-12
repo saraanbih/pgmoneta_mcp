@@ -55,9 +55,11 @@ log_path = /tmp/pgmoneta_mcp.log
 [pgmoneta]
 host = "localhost"
 port = 5000
+metrics = 5001
 ```
 
-Note that the port under pgmoneta section has to match your management port configured earlier. While the first port
+Note that `port` under the pgmoneta section has to match your management port configured earlier,
+while `metrics` should match pgmoneta's Prometheus endpoint.
 is what you'll run your MCP server at.
 
 ## Run MCP server

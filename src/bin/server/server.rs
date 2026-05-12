@@ -17,6 +17,7 @@ use clap::Parser;
 use pgmoneta_mcp::configuration;
 use pgmoneta_mcp::handler::PgmonetaHandler;
 use pgmoneta_mcp::logging::Logger;
+use pgmoneta_mcp::telemetry;
 use rmcp::transport::streamable_http_server::{
     StreamableHttpService, session::local::LocalSessionManager,
 };
@@ -75,10 +76,17 @@ async fn main() -> anyhow::Result<()> {
         .allow_headers(Any)
         .expose_headers(Any)
         .max_age(Duration::from_secs(86400));
+    let metrics = telemetry::metrics();
 
     let router = axum::Router::new()
+        .route("/metrics", axum::routing::get(telemetry::metrics_handler))
         .nest_service("/mcp", handler)
-        .layer(cors);
+        .layer(axum::middleware::from_fn_with_state(
+            metrics.clone(),
+            telemetry::metrics_middleware,
+        ))
+        .layer(cors)
+        .with_state(metrics);
     let tcp_listener = tokio::net::TcpListener::bind(&address).await?;
 
     configuration::CONFIG

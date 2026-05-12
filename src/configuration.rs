@@ -57,6 +57,9 @@ pub struct PgmonetaConfiguration {
     pub host: String,
     /// The port of the pgmoneta instance (Required).
     pub port: i32,
+    /// The port of the pgmoneta Prometheus metrics endpoint. Default: 5001.
+    #[serde(default = "default_metrics_port")]
+    pub metrics: i32,
     /// Compression algorithm for MCP <-> pgmoneta communication.
     /// Supported: "none", "gzip", "zstd", "lz4", "bzip2".
     /// Default: "zstd".
@@ -427,6 +430,10 @@ fn default_encryption() -> String {
     "aes_256_gcm".to_string()
 }
 
+fn default_metrics_port() -> i32 {
+    5001
+}
+
 fn default_timeout() -> u64 {
     30
 }
@@ -506,5 +513,47 @@ mod tests {
             err.to_string()
                 .contains("must define [pgmoneta_mcp_client].model")
         );
+    }
+
+    #[test]
+    fn test_load_configuration_defaults_metrics_port() {
+        let mut config_file = tempfile::NamedTempFile::new().unwrap();
+        let mut user_file = tempfile::NamedTempFile::new().unwrap();
+
+        writeln!(
+            config_file,
+            "[pgmoneta_mcp]\nport = 8000\n\n[pgmoneta]\nhost = localhost\nport = 5000\n"
+        )
+        .unwrap();
+        writeln!(user_file, "[admins]\nadmin = encrypted-password\n").unwrap();
+
+        let conf = load_configuration(
+            config_file.path().to_str().unwrap(),
+            user_file.path().to_str().unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(conf.pgmoneta.metrics, 5001);
+    }
+
+    #[test]
+    fn test_load_configuration_with_explicit_metrics_port() {
+        let mut config_file = tempfile::NamedTempFile::new().unwrap();
+        let mut user_file = tempfile::NamedTempFile::new().unwrap();
+
+        writeln!(
+            config_file,
+            "[pgmoneta_mcp]\nport = 8000\n\n[pgmoneta]\nhost = localhost\nport = 5000\nmetrics = 7001\n"
+        )
+        .unwrap();
+        writeln!(user_file, "[admins]\nadmin = encrypted-password\n").unwrap();
+
+        let conf = load_configuration(
+            config_file.path().to_str().unwrap(),
+            user_file.path().to_str().unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(conf.pgmoneta.metrics, 7001);
     }
 }

@@ -18,6 +18,7 @@ pub mod compression;
 pub mod conf;
 pub mod encryption;
 pub mod info;
+pub mod metrics;
 pub mod mode;
 pub mod retention;
 pub mod shutdown;
@@ -52,6 +53,8 @@ impl PgmonetaHandler {
             .with_async_tool::<backup::BackupServerTool>()
             .with_async_tool::<info::GetBackupInfoTool>()
             .with_async_tool::<info::ListBackupsTool>()
+            .with_async_tool::<metrics::GetMetricsTool>()
+            .with_async_tool::<metrics::MetricTool>()
             .with_async_tool::<retention::RetainBackupTool>()
             .with_async_tool::<retention::ExpungeBackupTool>()
             .with_async_tool::<shutdown::ShutdownTool>()

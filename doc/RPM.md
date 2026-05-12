@@ -165,12 +165,14 @@ log_mode = append
 [pgmoneta]
 host = localhost
 port = 5000
+metrics = 5001
 ```
 
 Update the `[pgmoneta]` section to match your pgmoneta instance:
 
 * `host` - The address of the pgmoneta server
 * `port` - The management port of the pgmoneta server
+* `metrics` - The Prometheus metrics port of the pgmoneta server
 
 See [CONFIGURATION.md](./CONFIGURATION.md) for all available options.
 

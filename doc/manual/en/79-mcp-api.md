@@ -190,6 +190,77 @@ struct RequestHeader {
 }
 ```
 
+#### metric
+
+**Description**: Returns Prometheus metric samples exposed by pgmoneta.
+
+**Parameters**:
+- `username` (string, required): pgmoneta admin username
+- `name` (string, required): Exact Prometheus metric name
+- `attributes` (object, optional): Label filters to match against the metric sample
+- `labels` (object, optional): Alias for `attributes`
+
+Use either `attributes` or `labels`, not both. Label values are matched exactly.
+If the filter is omitted, all samples with the given metric name are returned.
+
+**Examples**:
+
+Fetch all samples for a metric:
+
+```json
+{
+  "tool": "metric",
+  "arguments": {
+    "username": "admin",
+    "name": "pgmoneta_retention_server"
+  }
+}
+```
+
+Fetch a single sample by label:
+
+```json
+{
+  "tool": "metric",
+  "arguments": {
+    "username": "admin",
+    "name": "pgmoneta_retention_server",
+    "attributes": {
+      "server": "primary"
+    }
+  }
+}
+```
+
+**Response examples**:
+
+```text
+pgmoneta_version{version="0.22.0"} 1
+```
+
+```text
+pgmoneta_retention_server{server="primary"} 7
+pgmoneta_retention_server{server="standby"} 14
+```
+
+#### get_metrics
+
+**Description**: Returns the full Prometheus/OpenMetrics exposition exposed by pgmoneta.
+
+**Parameters**:
+- `username` (string, required): pgmoneta admin username
+
+**Example**:
+
+```json
+{
+  "tool": "get_metrics",
+  "arguments": {
+    "username": "admin"
+  }
+}
+```
+
 **Response structure**:
 ```json
 {
