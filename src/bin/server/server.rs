@@ -20,10 +20,11 @@ use pgmoneta_mcp::logging::Logger;
 use pgmoneta_mcp::telemetry;
 use pgmoneta_mcp::utils::Utility;
 use rmcp::transport::streamable_http_server::{
-    StreamableHttpService, session::local::LocalSessionManager,
+    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
 use std::io::{self, IsTerminal};
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 use tower_http::cors::{Any, CorsLayer};
 
 const BIND_ADDRESS: &str = "0.0.0.0";
@@ -74,10 +75,11 @@ async fn main() -> anyhow::Result<()> {
         config.pgmoneta_mcp.log_rotation_age.as_str(),
     );
 
+    let shutdown_token = CancellationToken::new();
     let handler = StreamableHttpService::new(
         || Ok(PgmonetaHandler::new()),
         LocalSessionManager::default().into(),
-        Default::default(),
+        StreamableHttpServerConfig::default().with_cancellation_token(shutdown_token.child_token()),
     );
 
     let cors = CorsLayer::new()
@@ -105,8 +107,19 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Starting MCP server at {address}");
 
+    let shutdown_signal = {
+        let shutdown_token = shutdown_token.clone();
+        async move {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("failed to listen for Ctrl+C");
+            tracing::info!("Ctrl+C received, shutting down active MCP sessions");
+            shutdown_token.cancel();
+        }
+    };
+
     let _ = axum::serve(tcp_listener, router)
-        .with_graceful_shutdown(async { tokio::signal::ctrl_c().await.unwrap() })
+        .with_graceful_shutdown(shutdown_signal)
         .await;
     Ok(())
 }
