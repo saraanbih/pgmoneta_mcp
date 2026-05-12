@@ -408,6 +408,7 @@ fn main() -> Result<()> {
             env!("CARGO_PKG_VERSION"),
             &config.client.url,
             client.is_some(),
+            active_model_endpoint(&llm_probes, active_model.as_deref()),
             active_model.as_deref(),
             model_reachable,
         ),
@@ -445,12 +446,18 @@ fn startup_banner(
     version: &str,
     client_url: &str,
     mcp_connected: bool,
+    llm_endpoint: Option<&str>,
     model: Option<&str>,
     model_reachable: bool,
 ) -> String {
     let status_lines = [
         format!("{CLIENT_NAME} {version}"),
         format!("MCP: {client_url} {}", connection_marker(mcp_connected)),
+        format!(
+            "LLM: {} {}",
+            llm_endpoint.unwrap_or("none"),
+            connection_marker(model_reachable)
+        ),
         format!(
             "Model: {} {}",
             model_label(model),
@@ -620,6 +627,7 @@ fn run_repl(
                                 &current_client_url,
                                 repl_configuration.timeout,
                                 version,
+                                active_model_endpoint(llm_probes, active_model.as_deref()),
                                 active_model.as_deref(),
                                 model_reachable,
                             )?;
@@ -635,6 +643,7 @@ fn run_repl(
                                 &mut client,
                                 &current_client_url,
                                 version,
+                                active_model_endpoint(llm_probes, active_model.as_deref()),
                                 active_model.as_deref(),
                                 model_reachable,
                             )?;
@@ -737,6 +746,7 @@ fn run_repl(
                             &current_client_url,
                             repl_configuration.timeout,
                             version,
+                            active_model_endpoint(llm_probes, active_model.as_deref()),
                             active_model.as_deref(),
                             model_reachable,
                         )?;
@@ -752,6 +762,7 @@ fn run_repl(
                             &mut client,
                             &current_client_url,
                             version,
+                            active_model_endpoint(llm_probes, active_model.as_deref()),
                             active_model.as_deref(),
                             model_reachable,
                         )?;
@@ -1612,6 +1623,7 @@ fn handle_model_command(
                 version,
                 client_url,
                 connected,
+                active_model_endpoint(llm_probes, active_model.as_deref()),
                 active_model.as_deref(),
                 model_reachable,
             );
@@ -1689,6 +1701,7 @@ fn connect_client(
     client_url: &str,
     client_timeout: u64,
     version: &str,
+    active_llm_endpoint: Option<&str>,
     active_model: Option<&str>,
     model_reachable: bool,
 ) -> Result<()> {
@@ -1699,10 +1712,24 @@ fn connect_client(
     match runtime.block_on(McpClient::connect(client_url, client_timeout)) {
         Ok(active_client) => {
             *client = Some(active_client);
-            print_status_header(version, client_url, true, active_model, model_reachable);
+            print_status_header(
+                version,
+                client_url,
+                true,
+                active_llm_endpoint,
+                active_model,
+                model_reachable,
+            );
         }
         Err(_) => {
-            print_status_header(version, client_url, false, active_model, model_reachable);
+            print_status_header(
+                version,
+                client_url,
+                false,
+                active_llm_endpoint,
+                active_model,
+                model_reachable,
+            );
         }
     }
     Ok(())
@@ -1734,6 +1761,7 @@ fn reload_client(
         current_client_url,
         client_timeout,
         version,
+        active_model_endpoint(llm_probes, active_model.as_deref()),
         active_model.as_deref(),
         model_reachable,
     )?;
@@ -1745,6 +1773,7 @@ fn disconnect_client(
     client: &mut Option<McpClient>,
     client_url: &str,
     version: &str,
+    active_llm_endpoint: Option<&str>,
     active_model: Option<&str>,
     model_reachable: bool,
 ) -> Result<()> {
@@ -1755,7 +1784,14 @@ fn disconnect_client(
 
     runtime.block_on(active_client.cleanup())?;
     println!("Disconnected.");
-    print_status_header(version, client_url, false, active_model, model_reachable);
+    print_status_header(
+        version,
+        client_url,
+        false,
+        active_llm_endpoint,
+        active_model,
+        model_reachable,
+    );
     Ok(())
 }
 
@@ -1780,16 +1816,25 @@ fn clear_and_print_header(
         version,
         client_url,
         connected,
+        active_model_endpoint(llm_probes, active_model),
         active_model,
         model_reachable,
     );
     Ok(())
 }
 
+fn active_model_endpoint<'a>(
+    llm_probes: &'a HashMap<String, LlmStatusProbe>,
+    active_model: Option<&str>,
+) -> Option<&'a str> {
+    active_model.and_then(|model| llm_probes.get(model).map(|probe| probe.endpoint.as_str()))
+}
+
 fn print_status_header(
     version: &str,
     client_url: &str,
     connected: bool,
+    active_llm_endpoint: Option<&str>,
     active_model: Option<&str>,
     model_reachable: bool,
 ) {
@@ -1799,6 +1844,7 @@ fn print_status_header(
             version,
             client_url,
             connected,
+            active_llm_endpoint,
             active_model,
             model_reachable
         )
@@ -2704,6 +2750,7 @@ mod tests {
             "0.3.0",
             "http://localhost:8000/mcp",
             false,
+            Some("http://localhost:11434"),
             Some("qwen"),
             true,
         );
@@ -2713,14 +2760,17 @@ mod tests {
 
         assert!(banner.contains("pgmoneta MCP client 0.3.0"));
         assert!(banner.contains("MCP: http://localhost:8000/mcp"));
+        assert!(banner.contains("LLM: http://localhost:11434"));
         assert!(banner.contains("Model: qwen"));
         assert!(plain_banner.contains("▄▄▀███▄▄▄▄"));
         assert!(banner_lines[1].contains("pgmoneta MCP client 0.3.0"));
         assert!(banner_lines[2].contains("MCP: http://localhost:8000/mcp"));
-        assert!(banner_lines[3].contains("Model: qwen"));
+        assert!(banner_lines[3].contains("LLM: http://localhost:11434"));
+        assert!(banner_lines[4].contains("Model: qwen"));
         assert!(banner_lines[1].contains('█'));
         assert!(banner_lines[2].contains('█'));
         assert!(banner_lines[3].contains('█'));
+        assert!(banner_lines[4].contains('█'));
         assert!(banner.contains(connection_marker(false)));
         assert!(banner.contains(connection_marker(true)));
         assert!(banner.starts_with('┏'));
@@ -2763,6 +2813,7 @@ mod tests {
             "0.3.0",
             "http://localhost:8000/mcp",
             false,
+            Some("http://localhost:8100/v1"),
             Some("gemma-4-E4B-it-GGUF"),
             true,
         );
