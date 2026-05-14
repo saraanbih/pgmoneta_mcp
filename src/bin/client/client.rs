@@ -36,7 +36,6 @@ use rustyline::{
 use serde::Serialize;
 use serde_json::Value;
 use std::borrow::Cow;
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, IsTerminal};
@@ -209,8 +208,6 @@ type ClientEditor = Editor<ClientHelper, DefaultHistory>;
 
 struct ClientHelper {
     llm_names: Vec<String>,
-    enable_terminal_title: bool,
-    last_terminal_title: RefCell<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -225,28 +222,23 @@ struct InterruptState {
 }
 
 impl ClientHelper {
-    fn new(llm_names: Vec<String>, enable_terminal_title: bool) -> Self {
-        Self {
-            llm_names,
-            enable_terminal_title,
-            last_terminal_title: RefCell::new(String::new()),
-        }
+    fn new(llm_names: Vec<String>) -> Self {
+        Self { llm_names }
     }
+}
 
-    fn sync_terminal_title(&self, command: Option<&str>) {
-        if !self.enable_terminal_title {
-            return;
-        }
+struct ClientTerminalTitleGuard;
 
-        let title = client_console_title(command);
-        let mut last_terminal_title = self.last_terminal_title.borrow_mut();
-        if *last_terminal_title == title {
-            return;
-        }
+impl ClientTerminalTitleGuard {
+    fn new(command: &str) -> Self {
+        set_client_terminal_title(Some(command));
+        Self
+    }
+}
 
-        let mut stdout = io::stdout();
-        let _ = pgmoneta_mcp::utils::Utility::write_terminal_title(&mut stdout, &title, true);
-        *last_terminal_title = title;
+impl Drop for ClientTerminalTitleGuard {
+    fn drop(&mut self) {
+        set_client_terminal_title(None);
     }
 }
 
@@ -334,7 +326,6 @@ impl Hinter for ClientHelper {
 
 impl Highlighter for ClientHelper {
     fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
-        self.sync_terminal_title(Some(line));
         Cow::Borrowed(line)
     }
 
@@ -343,7 +334,6 @@ impl Highlighter for ClientHelper {
         prompt: &'p str,
         _default: bool,
     ) -> Cow<'b, str> {
-        self.sync_terminal_title(None);
         Cow::Borrowed(prompt)
     }
 }
@@ -559,10 +549,7 @@ fn run_repl(
     mut active_model: Option<String>,
 ) -> Result<()> {
     let mut editor = ClientEditor::new().context("Failed to initialize line editor")?;
-    editor.set_helper(Some(ClientHelper::new(
-        llm_names.to_vec(),
-        io::stdout().is_terminal(),
-    )));
+    editor.set_helper(Some(ClientHelper::new(llm_names.to_vec())));
     configure_key_bindings(&mut editor);
     initialize_history(&mut editor)?;
     let mut mode = ClientMode::User;
@@ -589,8 +576,6 @@ fn run_repl(
                 if is_comment_input(line) {
                     continue;
                 }
-
-                set_client_terminal_title(Some(line));
 
                 if line.starts_with('/') {
                     match parse_input(
@@ -697,6 +682,8 @@ fn run_repl(
                     }
                     continue;
                 }
+
+                let _terminal_title_guard = ClientTerminalTitleGuard::new(line);
 
                 let Some(active_client) = client.as_ref() else {
                     eprintln!("{}", disconnected_message());
@@ -1279,24 +1266,66 @@ fn parse_input(
 ) -> Result<ClientCommand> {
     let trimmed = input.trim();
 
-    match trimmed {
-        "/help" => Ok(ClientCommand::Help),
-        "/clear" => Ok(ClientCommand::Clear),
-        "/connect" => Ok(ClientCommand::Connect(None)),
-        "/disconnect" => Ok(ClientCommand::Disconnect),
-        "/reload" => Ok(ClientCommand::Reload),
-        "/list-models" => Ok(ClientCommand::ListModels),
-        "/user" => Ok(ClientCommand::UserMode),
-        "/developer" => Ok(ClientCommand::DeveloperMode),
-        MODEL_COMMAND => Ok(ClientCommand::Model(None)),
-        "/tools" => Ok(ClientCommand::Tools),
-        "/exit" | "/quit" => Ok(ClientCommand::Exit),
-        _ if trimmed.starts_with("/connect ") => parse_connect_command(trimmed),
-        _ if trimmed.starts_with(MODEL_COMMAND_PREFIX) => {
-            parse_model_command(trimmed, available_models)
+    if let Some(command_name) = client_command_name(trimmed) {
+        if command_name.starts_with('\\') {
+            return Err(anyhow!("Unknown command '{}'", command_name));
         }
-        _ if trimmed.starts_with('/') => Err(anyhow!("Unknown command '{}'", trimmed)),
-        _ => parse_mode_input(trimmed, available_tools, llm_enabled, mode),
+
+        return parse_slash_command(trimmed, command_name, available_models);
+    }
+
+    parse_mode_input(trimmed, available_tools, llm_enabled, mode)
+}
+
+fn parse_slash_command(
+    input: &str,
+    command_name: &str,
+    available_models: &HashSet<String>,
+) -> Result<ClientCommand> {
+    match command_name {
+        "/help" => parse_no_argument_slash_command(input, command_name, ClientCommand::Help),
+        "/clear" => parse_no_argument_slash_command(input, command_name, ClientCommand::Clear),
+        "/connect" => parse_connect_command(input),
+        "/disconnect" => {
+            parse_no_argument_slash_command(input, command_name, ClientCommand::Disconnect)
+        }
+        "/reload" => parse_no_argument_slash_command(input, command_name, ClientCommand::Reload),
+        "/list-models" => {
+            parse_no_argument_slash_command(input, command_name, ClientCommand::ListModels)
+        }
+        "/user" => parse_no_argument_slash_command(input, command_name, ClientCommand::UserMode),
+        "/developer" => {
+            parse_no_argument_slash_command(input, command_name, ClientCommand::DeveloperMode)
+        }
+        MODEL_COMMAND => {
+            if input == MODEL_COMMAND {
+                Ok(ClientCommand::Model(None))
+            } else {
+                parse_model_command(input, available_models)
+            }
+        }
+        "/tools" => parse_no_argument_slash_command(input, command_name, ClientCommand::Tools),
+        "/exit" | "/quit" => {
+            parse_no_argument_slash_command(input, command_name, ClientCommand::Exit)
+        }
+        _ => Err(anyhow!("Unknown command '{}'", command_name)),
+    }
+}
+
+fn client_command_name(input: &str) -> Option<&str> {
+    let command_name = input.split_whitespace().next()?;
+    (command_name.starts_with('/') || command_name.starts_with('\\')).then_some(command_name)
+}
+
+fn parse_no_argument_slash_command(
+    input: &str,
+    command_name: &str,
+    command: ClientCommand,
+) -> Result<ClientCommand> {
+    if input == command_name {
+        Ok(command)
+    } else {
+        bail!("Usage: {command_name}");
     }
 }
 
@@ -1981,7 +2010,13 @@ fn render_prompt(prompt_target: &str, mode: ClientMode) -> String {
 }
 
 fn client_console_title(command: Option<&str>) -> String {
-    pgmoneta_mcp::utils::Utility::console_title(CLIENT_TITLE_LABEL, command)
+    command
+        .map(str::trim)
+        .filter(|command| !command.is_empty())
+        .map(|command| {
+            pgmoneta_mcp::utils::Utility::console_title(CLIENT_TITLE_LABEL, Some(command))
+        })
+        .unwrap_or_else(|| pgmoneta_mcp::utils::Utility::console_title(CLIENT_TITLE_LABEL, None))
 }
 
 fn set_client_terminal_title(command: Option<&str>) {
@@ -2462,6 +2497,33 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_input_reports_unknown_slash_command_by_command_name() {
+        let tools = HashSet::new();
+        let models = sample_models();
+
+        let err = parse_input("/q please", &tools, &models, false, ClientMode::User).unwrap_err();
+        assert_eq!(err.to_string(), "Unknown command '/q'");
+    }
+
+    #[test]
+    fn test_parse_input_rejects_backslash_commands_in_client() {
+        let tools = HashSet::new();
+        let models = sample_models();
+
+        let err = parse_input(r"\q", &tools, &models, false, ClientMode::User).unwrap_err();
+        assert_eq!(err.to_string(), "Unknown command '\\q'");
+    }
+
+    #[test]
+    fn test_parse_input_reports_usage_for_known_slash_command_with_extra_arguments() {
+        let tools = HashSet::new();
+        let models = sample_models();
+
+        let err = parse_input("/help now", &tools, &models, false, ClientMode::User).unwrap_err();
+        assert_eq!(err.to_string(), "Usage: /help");
+    }
+
+    #[test]
     fn test_parse_connect_command_rejects_extra_arguments() {
         let err = parse_connect_command("/connect http://localhost:9000/mcp now").unwrap_err();
         assert_eq!(err.to_string(), "Usage: /connect [url]");
@@ -2829,7 +2891,7 @@ mod tests {
 
     #[test]
     fn test_slash_completion_expands_unique_match() {
-        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()], false);
+        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()]);
         let history = DefaultHistory::new();
         let context = ReadlineContext::new(&history);
 
@@ -2842,7 +2904,7 @@ mod tests {
 
     #[test]
     fn test_slash_completion_lists_matching_commands() {
-        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()], false);
+        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()]);
         let history = DefaultHistory::new();
         let context = ReadlineContext::new(&history);
 
@@ -2881,7 +2943,7 @@ mod tests {
 
     #[test]
     fn test_slash_completion_ignores_non_command_inputs() {
-        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()], false);
+        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()]);
         let history = DefaultHistory::new();
         let context = ReadlineContext::new(&history);
 
@@ -2897,7 +2959,7 @@ mod tests {
 
     #[test]
     fn test_model_completion_lists_matching_models() {
-        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()], false);
+        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()]);
         let history = DefaultHistory::new();
         let context = ReadlineContext::new(&history);
 
@@ -2915,7 +2977,7 @@ mod tests {
 
     #[test]
     fn test_model_completion_lists_all_models_after_space() {
-        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()], false);
+        let helper = ClientHelper::new(vec!["gemma".to_string(), "qwen".to_string()]);
         let history = DefaultHistory::new();
         let context = ReadlineContext::new(&history);
 
