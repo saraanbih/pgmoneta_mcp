@@ -119,6 +119,45 @@ struct RequestHeader {
 }
 ```
 
+#### backup
+
+**Description**: Creates a backup for a specified server.
+
+**Parameters**:
+- `username` (string, required): pgmoneta admin username
+- `server` (string, required): Server name as configured in pgmoneta
+- `backup_id` (string, optional): Base backup identifier for incremental backup
+
+If `backup_id` is omitted, the tool creates a full backup.
+If `backup_id` is provided, the tool creates an incremental backup based on that backup.
+
+**Examples**:
+
+Create a full backup:
+
+```json
+{
+  "tool": "backup",
+  "arguments": {
+    "username": "admin",
+    "server": "primary"
+  }
+}
+```
+
+Create an incremental backup:
+
+```json
+{
+  "tool": "backup",
+  "arguments": {
+    "username": "admin",
+    "server": "primary",
+    "backup_id": "latest"
+  }
+}
+```
+
 #### get_backup_info
 
 **Description**: Retrieves detailed information about a specific backup.

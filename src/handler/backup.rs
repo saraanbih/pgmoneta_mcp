@@ -27,9 +27,10 @@ use rmcp::schemars;
 pub struct BackupRequest {
     pub username: String,
     pub server: String,
+    pub backup_id: Option<String>,
 }
 
-/// Tool for creating a full backup of a server.
+/// Tool for creating a full or incremental backup of a server.
 pub struct BackupServerTool;
 
 impl ToolBase for BackupServerTool {
@@ -38,13 +39,15 @@ impl ToolBase for BackupServerTool {
     type Error = McpError;
 
     fn name() -> Cow<'static, str> {
-        "backup_server".into()
+        "backup".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
         Some(
-            "Create a full backup of a server. \
+            "Create a backup of a server. \
             Requires a server name. \
+            If the backup identifier is not provided, a full backup will be created. \
+            If the backup identifier is provided, an incremental backup will be created. \
             The username has to be one of the pgmoneta admins to be able to access pgmoneta."
                 .into(),
         )
@@ -60,11 +63,26 @@ impl AsyncTool<PgmonetaHandler> for BackupServerTool {
         _service: &PgmonetaHandler,
         request: BackupRequest,
     ) -> Result<String, McpError> {
-        let result: String = PgmonetaClient::request_backup(&request.username, &request.server)
+        let result = if let Some(backup_id) = &request.backup_id {
+            PgmonetaClient::request_incremental_backup(
+                &request.username,
+                &request.server,
+                backup_id,
+            )
             .await
             .map_err(|e| {
-                McpError::internal_error(format!("Failed to create backup: {:?}", e), None)
-            })?;
+                McpError::internal_error(
+                    format!("Failed to create incremental backup: {:?}", e),
+                    None,
+                )
+            })?
+        } else {
+            PgmonetaClient::request_full_backup(&request.username, &request.server)
+                .await
+                .map_err(|e| {
+                    McpError::internal_error(format!("Failed to create full backup: {:?}", e), None)
+                })?
+        };
         PgmonetaHandler::generate_call_tool_result_string(&result)
     }
 }
@@ -78,10 +96,10 @@ mod tests {
 
     #[test]
     fn test_backup_server_tool_metadata() {
-        assert_eq!(BackupServerTool::name(), "backup_server");
+        assert_eq!(BackupServerTool::name(), "backup");
         let desc = BackupServerTool::description();
         assert!(desc.is_some());
-        assert!(desc.unwrap().contains("full backup"));
+        assert!(desc.unwrap().contains("backup"));
     }
 
     #[test]
@@ -89,8 +107,8 @@ mod tests {
         let tools = PgmonetaHandler::tool_router().list_all();
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
         assert!(
-            tool_names.contains(&"backup_server"),
-            "backup_server tool should be registered, found: {:?}",
+            tool_names.contains(&"backup"),
+            "backup tool should be registered, found: {:?}",
             tool_names
         );
     }

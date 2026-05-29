@@ -29,6 +29,7 @@ async fn backup_server_test() {
     let request = BackupRequest {
         username: "backup_user".to_string(),
         server: "primary".to_string(),
+        backup_id: None,
     };
 
     let response = BackupServerTool::invoke(&handler, request)
@@ -55,4 +56,58 @@ async fn backup_server_test() {
         .get("Status")
         .unwrap_or_else(|| panic!("Status field missing in Outcome: {response}"));
     assert_eq!(status, true, "unexpected status in response: {response}");
+}
+
+#[tokio::test]
+#[ignore = "requires pgmoneta stack (see test/check.sh and full-test CI job)"]
+async fn incremental_backup_test() {
+    common::init_config();
+
+    let handler = PgmonetaHandler::new();
+    let request = BackupRequest {
+        username: "backup_user".to_string(),
+        server: "primary".to_string(),
+        backup_id: None,
+    };
+
+    // create initial full backup at first
+    let _response = BackupServerTool::invoke(&handler, request)
+        .await
+        .expect("Full backup should succeed");
+
+    // create incremental backup with identifier
+    let incremental_request = BackupRequest {
+        username: "backup_user".to_string(),
+        server: "primary".to_string(),
+        backup_id: Some("oldest".to_string()),
+    };
+
+    let incremental_response = BackupServerTool::invoke(&handler, incremental_request)
+        .await
+        .expect("Incremental backup should succeed");
+
+    let json: Value =
+        serde_json::from_str(&incremental_response).expect("response should be valid json");
+
+    let header = json
+        .get("Header")
+        .unwrap_or_else(|| panic!("Header field missing in response: {incremental_response}"));
+    let command = header
+        .get("Command")
+        .unwrap_or_else(|| panic!("Command field missing in Header: {incremental_response}"));
+    assert_eq!(
+        command, "backup",
+        "unexpected command in response: {incremental_response}"
+    );
+
+    let outcome = json
+        .get("Outcome")
+        .unwrap_or_else(|| panic!("Outcome field missing in response: {incremental_response}"));
+    let status = outcome
+        .get("Status")
+        .unwrap_or_else(|| panic!("Status field missing in Outcome: {incremental_response}"));
+    assert_eq!(
+        status, true,
+        "unexpected status in response: {incremental_response}"
+    );
 }

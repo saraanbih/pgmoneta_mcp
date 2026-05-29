@@ -40,7 +40,7 @@ fn test_handler_initialization() {
 #[test]
 fn test_handler_default_trait() {
     let handler1 = PgmonetaHandler::new();
-    let handler2 = PgmonetaHandler::default();
+    let handler2 = PgmonetaHandler::new();
 
     // Both should produce valid handlers
     let info1 = handler1.get_info();

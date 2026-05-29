@@ -18,15 +18,35 @@ use crate::constant::Command;
 use serde::Serialize;
 
 #[derive(Serialize, Clone, Debug)]
-struct BackupRequest {
+struct FullBackupRequest {
     #[serde(rename = "Server")]
     server: String,
 }
 
+#[derive(Serialize, Clone, Debug)]
+struct IncrementalBackupRequest {
+    #[serde(rename = "Server")]
+    server: String,
+    #[serde(rename = "Identifier")]
+    identifier: String,
+}
+
 impl PgmonetaClient {
-    pub async fn request_backup(username: &str, server: &str) -> anyhow::Result<String> {
-        let backup_request = BackupRequest {
+    pub async fn request_full_backup(username: &str, server: &str) -> anyhow::Result<String> {
+        let backup_request = FullBackupRequest {
             server: server.to_string(),
+        };
+        Self::forward_request(username, Command::BACKUP, backup_request).await
+    }
+
+    pub async fn request_incremental_backup(
+        username: &str,
+        server: &str,
+        identifier: &str,
+    ) -> anyhow::Result<String> {
+        let backup_request = IncrementalBackupRequest {
+            server: server.to_string(),
+            identifier: identifier.to_string(),
         };
         Self::forward_request(username, Command::BACKUP, backup_request).await
     }
