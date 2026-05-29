@@ -198,6 +198,157 @@ let request = ListBackupsRequest {
 }
 ```
 
+#### WalInfoRequest
+
+Request structure for retrieving WAL information for a given server:
+
+```rust
+pub struct WalInfoRequest {
+    pub username: String,
+    pub server: String,
+}
+```
+
+**Fields**:
+- `username`: Admin username (must be present in pgmoneta admin configuration)
+- `server`: Server name as configured in pgmoneta
+
+**Example**:
+```rust
+let request = WalInfoRequest {
+    username: "admin".to_string(),
+    server: "primary".to_string(),
+};
+```
+
+**Serialized JSON**:
+```json
+{
+  "username": "admin",
+  "server": "primary"
+}
+```
+
+**Response**:
+On success the client returns a wrapped JSON object where `Outcome` contains the command and status, and `Response` contains the JSON emitted by `pgmoneta-walinfo`.
+
+The response typically includes `wal_stats`, an array of WAL segment statistics grouped by resource manager.
+
+```json
+{
+  "Outcome": {
+    "Command": "walinfo",
+    "Status": true
+  },
+  "Response": {
+    "wal_stats": [
+      {
+        "combined_size": 115145,
+        "combined_size_percentage": 2.88,
+        "count": 142,
+        "count_percentage": 0.82,
+        "fpi_size": 105152,
+        "fpi_size_percentage": 3.72,
+        "record_size": 9993,
+        "record_size_percentage": 0.85,
+        "resource_manager": "XLOG"
+      },
+      {
+        "combined_size": 94472,
+        "combined_size_percentage": 2.36,
+        "count": 2764,
+        "count_percentage": 15.91,
+        "fpi_size": 0,
+        "fpi_size_percentage": 0.0,
+        "record_size": 94472,
+        "record_size_percentage": 8.02,
+        "resource_manager": "Transaction"
+      },
+      {
+        "combined_size": 34,
+        "combined_size_percentage": 0.0,
+        "count": 1,
+        "count_percentage": 0.01,
+        "fpi_size": 0,
+        "fpi_size_percentage": 0.0,
+        "record_size": 34,
+        "record_size_percentage": 0.0,
+        "resource_manager": "CLOG"
+      },
+      {
+        "combined_size": 5532,
+        "combined_size_percentage": 0.14,
+        "count": 108,
+        "count_percentage": 0.62,
+        "fpi_size": 0,
+        "fpi_size_percentage": 0.0,
+        "record_size": 5532,
+        "record_size_percentage": 0.47,
+        "resource_manager": "Standby"
+      },
+      {
+        "combined_size": 179416,
+        "combined_size_percentage": 4.48,
+        "count": 2618,
+        "count_percentage": 15.07,
+        "fpi_size": 8192,
+        "fpi_size_percentage": 0.29,
+        "record_size": 171224,
+        "record_size_percentage": 14.53,
+        "resource_manager": "Heap2"
+      },
+      {
+        "combined_size": 3582539,
+        "combined_size_percentage": 89.5,
+        "count": 11390,
+        "count_percentage": 65.58,
+        "fpi_size": 2707628,
+        "fpi_size_percentage": 95.87,
+        "record_size": 874911,
+        "record_size_percentage": 74.24,
+        "resource_manager": "Heap"
+      },
+      {
+        "combined_size": 25627,
+        "combined_size_percentage": 0.64,
+        "count": 346,
+        "count_percentage": 1.99,
+        "fpi_size": 3380,
+        "fpi_size_percentage": 0.12,
+        "record_size": 22247,
+        "record_size_percentage": 1.89,
+        "resource_manager": "Btree"
+      }
+    ]
+  }
+}
+```
+
+**Usage (forward request)**
+```rust
+use pgmoneta_mcp::client::PgmonetaClient;
+use pgmoneta_mcp::handler::walinfo::WalInfoRequest;
+use pgmoneta_mcp::constant::Command;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let request = WalInfoRequest {
+        username: "admin".to_string(),
+        server: "primary".to_string(),
+    };
+
+    let response = PgmonetaClient::forward_request(
+        "admin",
+        Command::WALINFO,
+        request
+    ).await?;
+
+    let result: serde_json::Value = serde_json::from_str(&response)?;
+    println!("{}", result["Response"]);
+    Ok(())
+}
+```
+
 ### Core Methods
 
 #### build_request_header
