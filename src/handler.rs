@@ -16,6 +16,7 @@
 pub mod backup;
 pub mod compression;
 pub mod conf;
+pub mod delete;
 pub mod encryption;
 pub mod info;
 pub mod metrics;
@@ -68,6 +69,7 @@ impl PgmonetaHandler {
             .with_async_tool::<encryption::EncryptFileTool>()
             .with_async_tool::<encryption::DecryptFileTool>()
             .with_async_tool::<verify::VerifyBackupTool>()
+            .with_async_tool::<delete::DeleteTool>()
     }
 }
 

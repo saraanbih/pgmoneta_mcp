@@ -16,6 +16,7 @@
 mod backup;
 mod compression;
 mod conf;
+mod delete;
 mod encryption;
 mod info;
 mod metrics;

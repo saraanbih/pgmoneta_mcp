@@ -206,6 +206,30 @@ Create an incremental backup:
 }
 ```
 
+#### delete 
+
+**Description**: Deletes a specified backup from the pgmoneta server.
+
+**Parameters**:
+- `username` (string, required): pgmoneta admin username
+- `server` (string, required): Server name as configured in pgmoneta
+- `backup_id` (string, required): Backup identifier (can be backup label, "newest", "latest", or "oldest")
+- `force` (boolean, optional): If true, forces deletion of the backup.
+
+**Returns**: Confirmation of deletion or error message.
+**Example**:
+```json
+{
+  "tool": "delete",
+  "arguments": {
+    "username": "repl",
+    "server": "primary",
+    "backup_id": "newest",
+    "force": true
+  }
+}
+```
+
 #### list_backups
 
 **Description**: Lists all available backups for a specified server.
