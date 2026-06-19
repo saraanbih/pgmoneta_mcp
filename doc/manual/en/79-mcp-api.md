@@ -419,6 +419,41 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
+#### restore
+**Description**: Restores a backup to a specified directory.
+**Parameters**:
+- `username` (string, required): pgmoneta admin username
+- `server` (string, required): Server name as configured in pgmoneta
+- `backup_id` (string, required): Backup identifier (can be backup label, "newest", "latest", or "oldest")
+- `directory` (string, required): Target directory for restore
+- `current` (boolean, optional) To restore to the first stable checkpoint.
+- `name` (string, optional) To restore to the specified label.
+- `xid` (string, optional) To restore to the specified transaction ID.
+- `time` (string, optional) To restore to the specified timestamp.
+- `lsn` (string, optional) To restore to the specified LSN.
+- `inclusive` (string, optional) To restore inclusively of the specified information.
+- `timeline` (string, optional) To restore to the specified timeline.
+- `action` (string, optional): Action to perform on the primary server after restore (eg. `pause`, `shutdown`)
+- `primary` (boolean, optional) for cluster setup as primary.
+- `replica` (boolean, optional) for cluster setup as replica.
+
+**Example**:
+```json
+{
+  "tool": "restore",
+  "arguments": {
+    "username": "admin",
+    "server": "primary",
+    "backup_id": "latest",
+    "directory": "/tmp/restore",
+    "current": true,
+    "timeline": "1",
+    "action": "pause",
+    "primary": true,
+  }
+}
+```
+
 ### Data Translation
 
 The MCP server automatically translates raw pgmoneta responses into human-readable formats:
