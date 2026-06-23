@@ -14,6 +14,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 pub mod annotate;
+pub mod archive;
 pub mod backup;
 pub mod clear;
 pub mod compression;
@@ -55,6 +56,7 @@ impl PgmonetaHandler {
     pub fn tool_router() -> ToolRouter<Self> {
         ToolRouter::new()
             .with_async_tool::<annotate::AnnotateBackupTool>()
+            .with_async_tool::<archive::ArchiveTool>()
             .with_async_tool::<backup::BackupServerTool>()
             .with_async_tool::<clear::ClearTool>()
             .with_async_tool::<info::GetBackupInfoTool>()

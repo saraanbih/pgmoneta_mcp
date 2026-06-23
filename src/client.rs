@@ -14,6 +14,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 mod annotate;
+mod archive;
 mod backup;
 mod clear;
 mod compression;

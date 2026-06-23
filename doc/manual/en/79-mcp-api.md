@@ -454,6 +454,41 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
+#### archive (Similar to restore, but for archiving backups)
+**Description**: Archives a backup to a specified directory.
+**Parameters**:
+- `username` (string, required): pgmoneta admin username
+- `server` (string, required): Server name as configured in pgmoneta
+- `backup_id` (string, required): Backup identifier (can be backup label, "newest", "latest", or "oldest")
+- `directory` (string, required): Target directory for archive
+- `current` (boolean, optional) To archive the backup of the first stable checkpoint.
+- `name` (string, optional) To archive the backup of the specified label.
+- `xid` (string, optional) To archive the backup of the specified transaction ID.
+- `time` (string, optional) To archive the backup of the specified timestamp.
+- `lsn` (string, optional) To archive the backup of the specified LSN.
+- `inclusive` (string, optional) To archive inclusively of the specified information.
+- `timeline` (string, optional) To archive the backup of the specified timeline.
+- `action` (string, optional): Action to perform on the primary server after archive (eg. `pause`, `shutdown`)
+- `primary` (boolean, optional) for cluster setup as primary.
+- `replica` (boolean, optional) for cluster setup as replica.
+
+**Example**:
+```json
+{
+  "tool": "archive",
+  "arguments": {
+    "username": "admin",
+    "server": "primary",
+    "backup_id": "latest",
+    "directory": "/tmp/restore",
+    "current": true,
+    "timeline": "1",
+    "action": "pause",
+    "primary": true,
+  }
+}
+```
+
 ### Data Translation
 
 The MCP server automatically translates raw pgmoneta responses into human-readable formats:
