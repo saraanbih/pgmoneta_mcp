@@ -57,6 +57,7 @@ async fn retain_backup_test() {
         username: "backup_user".to_string(),
         server: "primary".to_string(),
         backup_id,
+        cascade: false,
     };
 
     let response = RetainBackupTool::invoke(&handler, request)
@@ -65,6 +66,42 @@ async fn retain_backup_test() {
 
     let json: Value = serde_json::from_str(&response).expect("response should be valid json");
     assert_command_and_status(&response, &json, "retain");
+}
+
+#[tokio::test]
+#[ignore = "requires pgmoneta stack (see test/check.sh and full-test CI job)"]
+async fn retain_with_cascade_backup_test() {
+    common::init_config();
+    let _guard = common::backup_fixture_lock().await;
+    let backup_id = common::ensure_backup("primary")
+        .await
+        .expect("backup fixture should be created");
+
+    let handler = PgmonetaHandler::new();
+    let request = RetainRequest {
+        username: "backup_user".to_string(),
+        server: "primary".to_string(),
+        backup_id,
+        cascade: true,
+    };
+
+    let response = RetainBackupTool::invoke(&handler, request)
+        .await
+        .expect("retain_backup should succeed");
+
+    let json: Value = serde_json::from_str(&response).expect("response should be valid json");
+    assert_command_and_status(&response, &json, "retain");
+
+    let response_json = json
+        .get("Response")
+        .expect("Response field missing in response");
+    let cascade_value = response_json
+        .get("Cascade")
+        .expect("Cascade field missing in Response");
+    assert_eq!(
+        cascade_value, true,
+        "unexpected cascade value in response: {response}"
+    );
 }
 
 #[tokio::test]
@@ -81,6 +118,7 @@ async fn expunge_backup_test() {
         username: "backup_user".to_string(),
         server: "primary".to_string(),
         backup_id: backup_id.clone(),
+        cascade: false,
     };
     let retain_response = RetainBackupTool::invoke(&handler, retain_request)
         .await
@@ -93,6 +131,7 @@ async fn expunge_backup_test() {
         username: "backup_user".to_string(),
         server: "primary".to_string(),
         backup_id,
+        cascade: false,
     };
 
     let response = ExpungeBackupTool::invoke(&handler, request)

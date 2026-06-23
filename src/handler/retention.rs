@@ -28,6 +28,7 @@ pub struct RetainRequest {
     pub username: String,
     pub server: String,
     pub backup_id: String,
+    pub cascade: bool,
 }
 
 #[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
@@ -35,6 +36,7 @@ pub struct ExpungeRequest {
     pub username: String,
     pub server: String,
     pub backup_id: String,
+    pub cascade: bool,
 }
 
 /// Tool for marking a backup as retained so it is not removed by retention policy.
@@ -46,13 +48,14 @@ impl ToolBase for RetainBackupTool {
     type Error = McpError;
 
     fn name() -> Cow<'static, str> {
-        "retain_backup".into()
+        "retain".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
         Some(
             "Retain a backup so it will not be removed by the retention policy. \
             Requires a server name and backup ID. \
+            Identify if the user wants to retain dependent backups (look for keywords like 'cascade', 'cascading', 'dependents', 'recursively', or 'all related'). If they do, you MUST explicitly set the cascade parameter to true in your output. \
             \"newest\", \"latest\" or \"oldest\" are also accepted as backup identifier. \
             The username has to be one of the pgmoneta admins to be able to access pgmoneta."
                 .into(),
@@ -75,12 +78,14 @@ impl AsyncTool<PgmonetaHandler> for RetainBackupTool {
         _service: &PgmonetaHandler,
         request: RetainRequest,
     ) -> Result<String, McpError> {
-        let result: String =
-            PgmonetaClient::request_retain(&request.username, &request.server, &request.backup_id)
-                .await
-                .map_err(|e| {
-                    McpError::internal_error(format!("Failed to retain backup: {:?}", e), None)
-                })?;
+        let result: String = PgmonetaClient::request_retain(
+            &request.username,
+            &request.server,
+            &request.backup_id,
+            request.cascade,
+        )
+        .await
+        .map_err(|e| McpError::internal_error(format!("Failed to retain backup: {:?}", e), None))?;
         PgmonetaHandler::generate_call_tool_result_string(&result)
     }
 }
@@ -94,13 +99,14 @@ impl ToolBase for ExpungeBackupTool {
     type Error = McpError;
 
     fn name() -> Cow<'static, str> {
-        "expunge_backup".into()
+        "expunge".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
         Some(
             "Expunge a backup so it can be removed by the retention policy. \
             Requires a server name and backup ID. \
+            Identify if the user wants to expunge dependent backups (look for keywords like 'cascade', 'cascading', 'dependents', 'recursively', or 'all related'). If they do, you MUST explicitly set the cascade parameter to true in your output. \
             \"newest\", \"latest\" or \"oldest\" are also accepted as backup identifier. \
             The username has to be one of the pgmoneta admins to be able to access pgmoneta."
                 .into(),
@@ -117,12 +123,16 @@ impl AsyncTool<PgmonetaHandler> for ExpungeBackupTool {
         _service: &PgmonetaHandler,
         request: ExpungeRequest,
     ) -> Result<String, McpError> {
-        let result: String =
-            PgmonetaClient::request_expunge(&request.username, &request.server, &request.backup_id)
-                .await
-                .map_err(|e| {
-                    McpError::internal_error(format!("Failed to expunge backup: {:?}", e), None)
-                })?;
+        let result: String = PgmonetaClient::request_expunge(
+            &request.username,
+            &request.server,
+            &request.backup_id,
+            request.cascade,
+        )
+        .await
+        .map_err(|e| {
+            McpError::internal_error(format!("Failed to expunge backup: {:?}", e), None)
+        })?;
         PgmonetaHandler::generate_call_tool_result_string(&result)
     }
 }
@@ -136,14 +146,14 @@ mod tests {
 
     #[test]
     fn test_retain_backup_tool_metadata() {
-        assert_eq!(RetainBackupTool::name(), "retain_backup");
+        assert_eq!(RetainBackupTool::name(), "retain");
         assert!(RetainBackupTool::description().is_some());
         assert!(RetainBackupTool::description().unwrap().contains("Retain"));
     }
 
     #[test]
     fn test_expunge_backup_tool_metadata() {
-        assert_eq!(ExpungeBackupTool::name(), "expunge_backup");
+        assert_eq!(ExpungeBackupTool::name(), "expunge");
         assert!(ExpungeBackupTool::description().is_some());
         assert!(
             ExpungeBackupTool::description()
@@ -157,13 +167,13 @@ mod tests {
         let tools = PgmonetaHandler::tool_router().list_all();
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
         assert!(
-            tool_names.contains(&"retain_backup"),
-            "retain_backup tool should be registered, found: {:?}",
+            tool_names.contains(&"retain"),
+            "retain tool should be registered, found: {:?}",
             tool_names
         );
         assert!(
-            tool_names.contains(&"expunge_backup"),
-            "expunge_backup tool should be registered, found: {:?}",
+            tool_names.contains(&"expunge"),
+            "expunge tool should be registered, found: {:?}",
             tool_names
         );
     }

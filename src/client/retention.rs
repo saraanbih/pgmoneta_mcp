@@ -23,6 +23,8 @@ struct RetainRequest {
     server: String,
     #[serde(rename = "Backup")]
     backup: String,
+    #[serde(rename = "Cascade", skip_serializing_if = "Option::is_none")]
+    cascade: Option<bool>,
 }
 
 impl PgmonetaClient {
@@ -30,10 +32,12 @@ impl PgmonetaClient {
         username: &str,
         server: &str,
         backup: &str,
+        cascade: bool,
     ) -> anyhow::Result<String> {
         let retain_request = RetainRequest {
             server: server.to_string(),
             backup: backup.to_string(),
+            cascade: Some(cascade),
         };
         Self::forward_request(username, Command::RETAIN, retain_request).await
     }
@@ -42,10 +46,12 @@ impl PgmonetaClient {
         username: &str,
         server: &str,
         backup: &str,
+        cascade: bool,
     ) -> anyhow::Result<String> {
         let retain_request = RetainRequest {
             server: server.to_string(),
             backup: backup.to_string(),
+            cascade: Some(cascade),
         };
         Self::forward_request(username, Command::EXPUNGE, retain_request).await
     }

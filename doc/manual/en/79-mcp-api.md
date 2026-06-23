@@ -489,6 +489,48 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
+#### retain
+**Description**: Retains a backup and optionally cascades retention to dependent backups.
+**Parameters**:
+- `username` (string, required): pgmoneta admin username
+- `server` (string, required): Server name as configured in pgmoneta
+- `backup_id` (string, required): Backup identifier (can be backup label, "newest", "latest", or "oldest")
+- `cascade` (boolean, optional): If true, retains dependent backups as well.
+
+**Example**:
+```json
+{
+  "tool": "retain",
+  "arguments": {
+    "username": "admin",
+    "server": "primary",
+    "backup_id": "latest",
+    "cascade": true
+  }
+}
+```
+
+#### expunge
+**Description**: Expunges a backup and optionally cascades expunging to dependent backups.
+**Parameters**:
+- `username` (string, required): pgmoneta admin username
+- `server` (string, required): Server name as configured in pgmoneta
+- `backup_id` (string, required): Backup identifier (can be backup label, "newest", "latest", or "oldest")
+- `cascade` (boolean, optional): If true, expunges dependent backups as well.
+
+**Example**:
+```json
+{
+  "tool": "expunge",
+  "arguments": {
+    "username": "admin",
+    "server": "primary",
+    "backup_id": "latest",
+    "cascade": true
+  }
+}
+```
+
 ### Data Translation
 
 The MCP server automatically translates raw pgmoneta responses into human-readable formats:
