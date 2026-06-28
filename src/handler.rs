@@ -24,6 +24,7 @@ pub mod encryption;
 pub mod info;
 pub mod metrics;
 pub mod mode;
+pub mod ping;
 pub mod restore;
 pub mod retention;
 pub mod shutdown;
@@ -72,6 +73,7 @@ impl PgmonetaHandler {
             .with_async_tool::<conf::ConfGetTool>()
             .with_async_tool::<conf::ConfSetTool>()
             .with_async_tool::<mode::SetModeTool>()
+            .with_async_tool::<ping::PingTool>()
             .with_async_tool::<compression::CompressFileTool>()
             .with_async_tool::<compression::DecompressFileTool>()
             .with_async_tool::<encryption::EncryptFileTool>()

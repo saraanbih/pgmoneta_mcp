@@ -531,6 +531,20 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
+#### ping
+**Description**: Ping pgmoneta to check if pgmoneta is alive.
+**Parameters**:
+- `username` (string, required): pgmoneta admin username
+**Example**:
+```json
+{
+  "tool": "ping",
+  "arguments": {
+    "username": "admin"
+  }
+}
+```
+
 ### Data Translation
 
 The MCP server automatically translates raw pgmoneta responses into human-readable formats:

@@ -24,6 +24,7 @@ mod encryption;
 mod info;
 mod metrics;
 mod mode;
+mod ping;
 mod restore;
 mod retention;
 mod shutdown;
