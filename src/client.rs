@@ -28,6 +28,7 @@ mod ping;
 mod restore;
 mod retention;
 mod shutdown;
+mod status;
 mod verify;
 
 use super::compression::CompressionUtil;

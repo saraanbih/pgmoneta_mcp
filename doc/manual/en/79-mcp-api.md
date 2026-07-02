@@ -545,6 +545,22 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
+#### status
+**Description**: Get the status of pgmoneta server.
+**Parameters**:
+- `username` (string, required): pgmoneta admin username
+- `in_details` (boolean, required): If true, returns detailed status information.
+**Example**:
+```json
+{
+  "tool": "status",
+  "arguments": {
+    "username": "admin",
+    "in_details": false
+  }
+}
+```
+
 ### Data Translation
 
 The MCP server automatically translates raw pgmoneta responses into human-readable formats:

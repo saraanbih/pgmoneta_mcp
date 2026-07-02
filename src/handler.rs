@@ -28,6 +28,7 @@ pub mod ping;
 pub mod restore;
 pub mod retention;
 pub mod shutdown;
+pub mod status;
 pub mod verify;
 
 use super::constant::*;
@@ -80,6 +81,7 @@ impl PgmonetaHandler {
             .with_async_tool::<encryption::DecryptFileTool>()
             .with_async_tool::<verify::VerifyBackupTool>()
             .with_async_tool::<delete::DeleteTool>()
+            .with_async_tool::<status::StatusTool>()
     }
 }
 
