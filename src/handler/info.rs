@@ -47,7 +47,7 @@ impl ToolBase for GetBackupInfoTool {
     type Error = McpError;
 
     fn name() -> Cow<'static, str> {
-        "get_backup_info".into()
+        "get_info".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn test_get_backup_info_tool_metadata() {
-        assert_eq!(GetBackupInfoTool::name(), "get_backup_info");
+        assert_eq!(GetBackupInfoTool::name(), "get_info");
         let desc = GetBackupInfoTool::description();
         assert!(desc.is_some());
         assert!(desc.unwrap().contains("backup"));

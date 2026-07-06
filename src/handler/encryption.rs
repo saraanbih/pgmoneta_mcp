@@ -44,7 +44,7 @@ impl ToolBase for EncryptFileTool {
     type Error = McpError;
 
     fn name() -> Cow<'static, str> {
-        "encrypt_file".into()
+        "encrypt".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
@@ -91,7 +91,7 @@ impl ToolBase for DecryptFileTool {
     type Error = McpError;
 
     fn name() -> Cow<'static, str> {
-        "decrypt_file".into()
+        "decrypt".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
@@ -132,14 +132,14 @@ mod tests {
 
     #[test]
     fn test_encrypt_file_tool_metadata() {
-        assert_eq!(EncryptFileTool::name(), "encrypt_file");
+        assert_eq!(EncryptFileTool::name(), "encrypt");
         assert!(EncryptFileTool::description().is_some());
         assert!(EncryptFileTool::description().unwrap().contains("Encrypt"));
     }
 
     #[test]
     fn test_decrypt_file_tool_metadata() {
-        assert_eq!(DecryptFileTool::name(), "decrypt_file");
+        assert_eq!(DecryptFileTool::name(), "decrypt");
         assert!(DecryptFileTool::description().is_some());
         assert!(DecryptFileTool::description().unwrap().contains("Decrypt"));
     }
@@ -149,13 +149,13 @@ mod tests {
         let tools = PgmonetaHandler::tool_router().list_all();
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
         assert!(
-            tool_names.contains(&"encrypt_file"),
-            "encrypt_file tool should be registered, found: {:?}",
+            tool_names.contains(&"encrypt"),
+            "encrypt tool should be registered, found: {:?}",
             tool_names
         );
         assert!(
-            tool_names.contains(&"decrypt_file"),
-            "decrypt_file tool should be registered, found: {:?}",
+            tool_names.contains(&"decrypt"),
+            "decrypt tool should be registered, found: {:?}",
             tool_names
         );
     }

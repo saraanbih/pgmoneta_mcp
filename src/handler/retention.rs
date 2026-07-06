@@ -24,26 +24,18 @@ use rmcp::model::JsonObject;
 use rmcp::schemars;
 
 #[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
-pub struct RetainRequest {
+pub struct RetentionRequest {
     pub username: String,
     pub server: String,
     pub backup_id: String,
-    pub cascade: bool,
-}
-
-#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
-pub struct ExpungeRequest {
-    pub username: String,
-    pub server: String,
-    pub backup_id: String,
-    pub cascade: bool,
+    pub cascade: Option<bool>,
 }
 
 /// Tool for marking a backup as retained so it is not removed by retention policy.
 pub struct RetainBackupTool;
 
 impl ToolBase for RetainBackupTool {
-    type Parameter = RetainRequest;
+    type Parameter = RetentionRequest;
     type Output = String;
     type Error = McpError;
 
@@ -63,7 +55,7 @@ impl ToolBase for RetainBackupTool {
     }
 
     // input_schema is NOT overridden — the default generates the correct JSON schema
-    // automatically from `type Parameter = RetainRequest` via its JsonSchema derive.
+    // automatically from `type Parameter = RetentionRequest` via its JsonSchema derive.
 
     // output_schema must be overridden to return None because our Output type is String
     // (dynamically-translated JSON), and the MCP spec requires output schema root type
@@ -76,13 +68,14 @@ impl ToolBase for RetainBackupTool {
 impl AsyncTool<PgmonetaHandler> for RetainBackupTool {
     async fn invoke(
         _service: &PgmonetaHandler,
-        request: RetainRequest,
+        request: RetentionRequest,
     ) -> Result<String, McpError> {
+        let cascade = request.cascade.unwrap_or(false);
         let result: String = PgmonetaClient::request_retain(
             &request.username,
             &request.server,
             &request.backup_id,
-            request.cascade,
+            cascade,
         )
         .await
         .map_err(|e| McpError::internal_error(format!("Failed to retain backup: {:?}", e), None))?;
@@ -94,7 +87,7 @@ impl AsyncTool<PgmonetaHandler> for RetainBackupTool {
 pub struct ExpungeBackupTool;
 
 impl ToolBase for ExpungeBackupTool {
-    type Parameter = ExpungeRequest;
+    type Parameter = RetentionRequest;
     type Output = String;
     type Error = McpError;
 
@@ -121,13 +114,14 @@ impl ToolBase for ExpungeBackupTool {
 impl AsyncTool<PgmonetaHandler> for ExpungeBackupTool {
     async fn invoke(
         _service: &PgmonetaHandler,
-        request: ExpungeRequest,
+        request: RetentionRequest,
     ) -> Result<String, McpError> {
+        let cascade = request.cascade.unwrap_or(false);
         let result: String = PgmonetaClient::request_expunge(
             &request.username,
             &request.server,
             &request.backup_id,
-            request.cascade,
+            cascade,
         )
         .await
         .map_err(|e| {

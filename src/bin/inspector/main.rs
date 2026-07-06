@@ -362,7 +362,7 @@ mod tests {
         // Nested JSON
         let nested_data = json!({
             "tool": {
-                "name": "get_backup_info",
+                "name": "get_info",
                 "params": {
                     "server": "primary",
                     "backup": "latest"

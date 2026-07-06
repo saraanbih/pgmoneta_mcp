@@ -19,7 +19,6 @@ Options:
 ```
 
 If you encounter any issues following the above steps, you can refer to the **Installation** chapter to see how to install or compile pgmoneta_mcp on your system.
-
 ## Prerequisites
 
 You need to have PostgreSQL 14+ and pgmoneta installed and running. See pgmoneta's [manual](https://github.com/pgmoneta/pgmoneta/tree/main/doc/manual/en) on how to install and run pgmoneta.
@@ -246,6 +245,114 @@ Add the following to your Claude Desktop configuration file:
 ```
 
 Restart Claude Desktop and the pgmoneta tools will be available.
+
+## Try your first backup flow
+
+This section is a guided exercise in the same spirit as a first practical
+walkthrough. You will create a backup, list backups, and restore one backup.
+
+### Step 1: Take a backup
+
+From your MCP client, ask:
+
+- `Take a backup for server primary`
+
+If you prefer explicit tool-call style, use:
+
+```text
+backup {"server":"primary"}
+```
+
+Expected result:
+
+```
+primary (pgmoneta 0.22.0 w/ PostgreSQL 18.1)
+• 20260706113507 | Full, Backup: 6.03 MB, Restore: 6.02 MB, Valid
+```
+
+A new backup label `20260706113507` is created. You can use this label in the next step, or simply use `latest` to refer to the newest backup.
+
+### Step 2: List backups
+
+Ask:
+
+- `List backups for server primary in descending order`
+
+Or explicit call:
+
+```text
+list_backups {"server":"primary","sort":"desc"}
+```
+
+Expected result:
+
+```
+primary (pgmoneta 0.22.0 w/ PostgreSQL 18.1)
+• 20260706113634 | Full, Backup: 6.03 MB, Restore: 6.02 MB, Valid
+• 20260706113617 | Full, Backup: 0 B, Restore: 6.02 MB, Valid
+• 20260706113507 | Full, Backup: 6.03 MB, Restore: 6.02 MB, Valid
+```
+
+### Step 3: Restore a backup
+
+Choose one backup from Step 2 (or use `latest`) and restore it into an empty
+target directory on the pgmoneta host.
+
+Ask:
+
+- `Restore the latest backup for server primary to /tmp/pgmoneta-restore` 
+
+Or explicit call:
+
+```text
+restore {"server":"primary","backup_id":"latest","directory":"/tmp/pgmoneta-restore"}
+```
+
+Expected result:
+
+- The command returns success `true` in `Outcome.Status`
+- The restore target directory contains restored database files
+
+```
+{
+    "Header": {
+        "ClientVersion": "0.21.0",
+        "Command": "restore",
+        "Compression": "zstd",
+        "Encryption": "aes_256_gcm",
+        "Output": 1,
+        "Timestamp": 20260706113726
+    },
+    "Outcome": {
+        "Status": true,
+        "Time": "00:00:7.4182"
+    },
+    "Request": {
+        "Backup": "latest",
+        "Directory": "/tmp/pgmoneta-restore",
+        "Position": "current",
+        "Server": "primary"
+    },
+    "Response": {
+        "Backup": 20260706113634,
+        "BackupSize": "6.03 MB",
+        "BiggestFileSize": "232.00 KB",
+        "Comments": "",
+        "Compression": "zstd",
+        "Encryption": "aes_256_gcm",
+        "Incremental": false,
+        "IncrementalParent": "",
+        "MajorVersion": 18,
+        "MinorVersion": 1,
+        "RestoreSize": "6.02 MB",
+        "Server": "primary",
+        "ServerVersion": "0.22.0"
+    }
+}
+```
+
+If something fails, check the **Troubleshooting** section below and inspect MCP
+server logs.
 
 ## Using a local LLM
 

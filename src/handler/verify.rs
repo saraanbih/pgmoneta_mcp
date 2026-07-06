@@ -41,7 +41,7 @@ impl ToolBase for VerifyBackupTool {
     type Error = McpError;
 
     fn name() -> Cow<'static, str> {
-        "verify_backup".into()
+        "verify".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_verify_backup_tool_metadata() {
-        assert_eq!(VerifyBackupTool::name(), "verify_backup");
+        assert_eq!(VerifyBackupTool::name(), "verify");
         let desc = VerifyBackupTool::description();
         assert!(desc.is_some());
         let desc = desc.unwrap();
@@ -105,8 +105,8 @@ mod tests {
         let tools = PgmonetaHandler::tool_router().list_all();
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
         assert!(
-            tool_names.contains(&"verify_backup"),
-            "verify_backup tool should be registered, found: {:?}",
+            tool_names.contains(&"verify"),
+            "verify tool should be registered, found: {:?}",
             tool_names
         );
     }

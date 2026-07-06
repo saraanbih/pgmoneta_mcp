@@ -44,7 +44,7 @@ impl ToolBase for CompressFileTool {
     type Error = McpError;
 
     fn name() -> Cow<'static, str> {
-        "compress_file".into()
+        "compress".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
@@ -92,7 +92,7 @@ impl ToolBase for DecompressFileTool {
     type Error = McpError;
 
     fn name() -> Cow<'static, str> {
-        "decompress_file".into()
+        "decompress".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_compress_file_tool_metadata() {
-        assert_eq!(CompressFileTool::name(), "compress_file");
+        assert_eq!(CompressFileTool::name(), "compress");
         assert!(CompressFileTool::description().is_some());
         assert!(
             CompressFileTool::description()
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_decompress_file_tool_metadata() {
-        assert_eq!(DecompressFileTool::name(), "decompress_file");
+        assert_eq!(DecompressFileTool::name(), "decompress");
         assert!(DecompressFileTool::description().is_some());
         assert!(
             DecompressFileTool::description()
@@ -159,13 +159,13 @@ mod tests {
         let tools = PgmonetaHandler::tool_router().list_all();
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
         assert!(
-            tool_names.contains(&"compress_file"),
-            "compress_file tool should be registered, found: {:?}",
+            tool_names.contains(&"compress"),
+            "compress tool should be registered, found: {:?}",
             tool_names
         );
         assert!(
-            tool_names.contains(&"decompress_file"),
-            "decompress_file tool should be registered, found: {:?}",
+            tool_names.contains(&"decompress"),
+            "decompress tool should be registered, found: {:?}",
             tool_names
         );
     }

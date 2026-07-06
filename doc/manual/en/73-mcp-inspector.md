@@ -32,7 +32,7 @@ pgmoneta-mcp-inspector
 │       │   └── --output -o <tree|json> (Default: tree)
 │       │
 │       └── call (Call a specific tool)
-│           ├── <NAME>              (Position 1: Tool name, e.g., get_backup_info)
+│           ├── <NAME>              (Position 1: Tool name, e.g., get_info)
 │           ├── <ARGS>              (Position 2: Strict JSON arguments. Default: "{}")
 │           ├── --file -f <PATH>    (Optional: Path file containing JSON arguments)
 │           └── --output -o <tree|json> (Default: tree)
@@ -66,7 +66,7 @@ pgmoneta-mcp-inspector
 
 > **Note 1:** The `-f` flag allows you to load data from any file. This is functionally identical to typing directly in the terminal.Max file size supported: **10 MB**
 > ```bash
-> ./pgmoneta-mcp-inspector inspector --conf <path_to_inspector_conf> tool call get_backup_info -f <path_to_args_file>
+> ./pgmoneta-mcp-inspector inspector --conf <path_to_inspector_conf> tool call get_info -f <path_to_args_file>
 > ```
 
 ---

@@ -63,11 +63,11 @@ The `PgmonetaHandler` is the main entry point for MCP requests. It implements th
 #[tool(
     description = "Get information of a backup using given backup ID and server name"
 )]
-async fn get_backup_info(
+async fn get_info(
     &self,
     Parameters(args): Parameters<InfoRequest>,
 ) -> Result<CallToolResult, McpError> {
-    let result = self._get_backup_info(args).await?;
+    let result = self._get_info(args).await?;
     Self::_generate_call_tool_result(&result)
 }
 ```
@@ -219,7 +219,7 @@ Remove a comment:
 }
 ```
 
-#### get_backup_info
+#### get_info
 
 **Description**: Retrieves detailed information about a specific backup.
 
@@ -240,7 +240,7 @@ Remove a comment:
 **Example**:
 ```json
 {
-  "tool": "get_backup_info",
+  "tool": "get_info",
   "arguments": {
     "username": "admin",
     "server": "primary",
@@ -680,7 +680,7 @@ client.initialize()
 
 # Call tool to get backup info
 result = client.call_tool(
-    "get_backup_info",
+    "get_info",
     {
         "username": "admin",
         "server": "primary",

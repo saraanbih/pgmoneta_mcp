@@ -14,9 +14,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use pgmoneta_mcp::handler::PgmonetaHandler;
-use pgmoneta_mcp::handler::retention::{
-    ExpungeBackupTool, ExpungeRequest, RetainBackupTool, RetainRequest,
-};
+use pgmoneta_mcp::handler::retention::{ExpungeBackupTool, RetainBackupTool, RetentionRequest};
 use rmcp::handler::server::router::tool::AsyncTool;
 use serde_json::Value;
 
@@ -53,11 +51,11 @@ async fn retain_backup_test() {
         .expect("backup fixture should be created");
 
     let handler = PgmonetaHandler::new();
-    let request = RetainRequest {
+    let request = RetentionRequest {
         username: "backup_user".to_string(),
         server: "primary".to_string(),
         backup_id,
-        cascade: false,
+        cascade: Some(false),
     };
 
     let response = RetainBackupTool::invoke(&handler, request)
@@ -78,11 +76,11 @@ async fn retain_with_cascade_backup_test() {
         .expect("backup fixture should be created");
 
     let handler = PgmonetaHandler::new();
-    let request = RetainRequest {
+    let request = RetentionRequest {
         username: "backup_user".to_string(),
         server: "primary".to_string(),
         backup_id,
-        cascade: true,
+        cascade: Some(true),
     };
 
     let response = RetainBackupTool::invoke(&handler, request)
@@ -114,11 +112,11 @@ async fn expunge_backup_test() {
         .expect("backup fixture should be created");
 
     let handler = PgmonetaHandler::new();
-    let retain_request = RetainRequest {
+    let retain_request = RetentionRequest {
         username: "backup_user".to_string(),
         server: "primary".to_string(),
         backup_id: backup_id.clone(),
-        cascade: false,
+        cascade: Some(false),
     };
     let retain_response = RetainBackupTool::invoke(&handler, retain_request)
         .await
@@ -127,11 +125,11 @@ async fn expunge_backup_test() {
         serde_json::from_str(&retain_response).expect("retain response should be valid json");
     assert_command_and_status(&retain_response, &retain_json, "retain");
 
-    let request = ExpungeRequest {
+    let request = RetentionRequest {
         username: "backup_user".to_string(),
         server: "primary".to_string(),
         backup_id,
-        cascade: false,
+        cascade: Some(false),
     };
 
     let response = ExpungeBackupTool::invoke(&handler, request)

@@ -2311,7 +2311,7 @@ mod tests {
 
     #[test]
     fn test_parse_tool_calls_in_developer_mode() {
-        let tools = HashSet::from(["info".to_string(), "get_backup_info".to_string()]);
+        let tools = HashSet::from(["info".to_string(), "get_info".to_string()]);
         let models = sample_models();
 
         assert_eq!(
@@ -2324,7 +2324,7 @@ mod tests {
 
         assert_eq!(
             parse_input(
-                r#"get_backup_info {"server":"primary"}"#,
+                r#"get_info {"server":"primary"}"#,
                 &tools,
                 &models,
                 false,
@@ -2332,7 +2332,7 @@ mod tests {
             )
             .unwrap(),
             ClientCommand::ToolCall {
-                name: "get_backup_info".to_string(),
+                name: "get_info".to_string(),
                 args: HashMap::from([("server".to_string(), json!("primary"))]),
             }
         );
