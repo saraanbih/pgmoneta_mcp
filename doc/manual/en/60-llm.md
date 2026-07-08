@@ -40,9 +40,9 @@ pgmoneta
 
 ## Configuration
 
-Add an `[llm]` section to your `pgmoneta-mcp.conf` file to configure the runtime.
+Add an `[llm]` section to your `pgmoneta-mcp.conf** file to configure the runtime.
 
-### Configuration properties
+**Configuration properties**
 
 | Property | Default | Required | Description |
 | :------- | :------ | :------- | :---------- |
@@ -56,7 +56,7 @@ Add an `[llm]` section to your `pgmoneta-mcp.conf` file to configure the runtime
 When choosing a local runtime for **pgmoneta_mcp**, consider the following trade-offs
 between ease of use and granular control.
 
-### Runtime comparison
+**Runtime comparison**
 
 | Feature | Ollama | RamaLama | llama.cpp | vLLM |
 | :--- | :--- | :--- | :--- | :--- |
@@ -64,9 +64,9 @@ between ease of use and granular control.
 | **Model Management** | Built-in CLI (`pull`, `list`) | Automatic (OCI/HF registry) | Manual download of `.gguf` files | Auto-downloads Safetensors |
 | **Ease of Use** | High (recommended for beginners) | High (container-based) | Advanced (manual configuration) | Intermediate |
 | **Control** | Automatic hardware detection | Container-native isolation | Granular threading/GPU/RAM control | High-throughput optimizations |
-| **Performance** | Excellent (balanced) | Excellent (flexibility) | Maximum (optimized for specific hardware) | Production-grade throughput |
+| **Performance** | Excellent (balanced) | Excellent (flexibility) | Maximum (optimized for specific hardware** | Production-grade throughput |
 
-### Pros and Cons
+**Pros and Cons**
 
 **Ollama**
 
@@ -131,9 +131,9 @@ between ease of use and granular control.
 When choosing an LLM for **pgmoneta_mcp**, keep these key concepts in mind regardless of which provider you choose:
 
 1. **Instruct vs. Base**: You must use a model fine-tuned for instruction following or chat (usually labeled `Instruct` or `Chat`). Base models are not trained to follow instructions and will fail at tool calling.
-2. **Hardware Limits**: The model's listed file size indicates the *minimum* RAM needed simply to load its weights. Actual runtime usage will be 20-30% higher because the runtime allocates memory for context caching and inference buffers.
+2. **Hardware Limits**: The model's listed file size indicates the *minimum** RAM needed simply to load its weights. Actual runtime usage will be 20-30% higher because the runtime allocates memory for context caching and inference buffers.
 
-### Setups & Storage Management
+**Setups & Storage Management**
 
 To prevent running out of disk space ("No space left on device") and ensure you have the hardware to run models, we define three standard setups:
 
@@ -143,7 +143,7 @@ To prevent running out of disk space ("No space left on device") and ensure you 
 
 **Important**: Large models consume significant storage space. By default, runtimes store downloaded model files in standard cache directories (like `~/.ollama` or `~/.cache/huggingface`). If your root drive (`/`) has limited space, you **must** override the storage/cache directory to a larger mounted volume. Instructions to do this are provided for each backend in the subsequent chapters.
 
-### Understanding model names
+**Understanding model names**
 
 Whether you are pulling a model via Ollama or RamaLama, or downloading a `.gguf` file for `llama.cpp`, the model name usually encodes its size and compression level:
 
@@ -168,9 +168,9 @@ Start with a `7B` or `8B` model as a baseline. If the model repeatedly calls wro
 
 **Quantization level (`Qy`)**
 
-Models are compressed ("quantized") to reduce memory usage. The `Q` suffix indicates the compression level. `Q4_K_M` (4-bit quantization) is the recommended starting point for most setups — it uses roughly half the RAM of an uncompressed model with only a minor drop in reasoning quality.
+Models are compressed ("quantized") to reduce memory usage. The `Q` suffix indicates the compression level. `Q4_K_M` (4-bit quantization** is the recommended starting point for most setups — it uses roughly half the RAM of an uncompressed model with only a minor drop in reasoning quality.
 
-### Model Compatibility Matrix
+**Model Compatibility Matrix**
 
 The model must support **tool calling** (function calling) to work with pgmoneta MCP tools.
 
@@ -183,8 +183,4 @@ The model must support **tool calling** (function calling) to work with pgmoneta
 | `qwen2.5:7b` | ~4.7 GB | ~8 GB | Yes | Yes | Yes (GGUF) | Yes | Excellent tool calling capabilities |
 | `mistral:7b` | ~4.1 GB | ~8 GB | Yes | Yes | Yes (GGUF) | Yes | Strong performance for open-source models |
 
-Examples of provider-specific model names can be found in the Ollama, RamaLama, llama.cpp, and vLLM sections.
-
-## Next step
-
-The following sections document the recommended local runtimes: **Ollama**, **RamaLama**, **llama.cpp**, and **vLLM**, including installation, model setup, and configuration.
+Examples of provider-specific model names can be found in the llama.cpp, Ollama, vLLM and RamaLama sections.

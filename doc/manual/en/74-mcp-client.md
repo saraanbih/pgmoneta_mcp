@@ -1,6 +1,8 @@
-# pgmoneta-mcp-client
+\newpage
 
-## Client Configuration File
+## Client internals
+
+**Client Configuration File**
 
 The interactive client reads connection settings from a dedicated INI conf file.
 
@@ -35,7 +37,7 @@ The file must contain a `[pgmoneta_mcp_client]` section and may optionally
 include one or more named LLM profile sections using the same keys as
 `pgmoneta-mcp-server.conf`.
 
-### `[pgmoneta_mcp_client]`
+**`[pgmoneta_mcp_client]`**
 
 | Key | Required | Description |
 | :--- | :--- | :--- |
@@ -43,7 +45,7 @@ include one or more named LLM profile sections using the same keys as
 | `timeout` | No | Connection and request timeout in seconds. Defaults to `30` when omitted. |
 | `model` | No* | Default named LLM profile used for natural-language requests. Required when more than one LLM profile is configured. |
 
-### `[<llm-name>]`
+**`[<llm-name>]`**
 
 | Key | Required | Description |
 | :--- | :--- | :--- |
@@ -80,7 +82,7 @@ model = ggml-org/gemma-3-4b-it-GGUF
 max_tool_rounds = 10
 ```
 
-## Interactive Shell
+**Interactive Shell**
 
 Start the client:
 
@@ -91,7 +93,7 @@ Start the client:
 The prompt uses the selected username and current MCP target URL:
 
 ```text
-admin@localhost:8000/mcp$ 
+admin@localhost:8000/mcp$
 ```
 
 The startup header shows the current MCP target URL and active model profile.
@@ -101,7 +103,7 @@ endpoint reachability. The same header is refreshed after `/clear`, `/connect`,
 `/disconnect`, `/reload`, and `/model [name]`. The prompt follows the same
 current MCP target URL, even after a failed `/connect` or after `/disconnect`.
 
-## Commands
+**Commands**
 
 ```text
 /clear                Clear the terminal and reprint the status header

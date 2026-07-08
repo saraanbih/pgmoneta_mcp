@@ -1,6 +1,8 @@
-# pgmoneta-mcp-inspector
+\newpage
 
-## Inspector Configuration File
+## Inspector internals
+
+**Inspector Configuration File**
 
 The `inspector` command reads connection settings from a conf file.
 
@@ -18,7 +20,8 @@ url = http://localhost:8000/mcp
 timeout = 30
 ```
 
-## CLI Hierarchy Tree
+**CLI Hierarchy Tree**
+
 The following tree visualizes the entire command-line structure.
 
 ```text
@@ -44,22 +47,22 @@ pgmoneta-mcp-inspector
 ```
 ---
 
-## Commands
- Execute commands directly.
+**Commands**
 
-### A. Inspector Example
+Execute commands directly.
 
-#### 1. Listing Tools
+**1. Listing Tools**
 
 ```bash
 ./pgmoneta-mcp-inspector inspector --conf <path_to_inspector_conf> tool list
 ```
 
-#### 2. Calling a Tool
+**2. Calling a Tool**
 
 ```bash
 ./pgmoneta-mcp-inspector inspector --conf <path_to_inspector_conf> tool call <tool_name_with_args> '{"key": "value"}'
 ```
+
 ```bash
 ./pgmoneta-mcp-inspector inspector --conf <path_to_inspector_conf> tool call <tool_name_without_args>
 ```
@@ -69,9 +72,7 @@ pgmoneta-mcp-inspector
 > ./pgmoneta-mcp-inspector inspector --conf <path_to_inspector_conf> tool call get_info -f <path_to_args_file>
 > ```
 
----
-
-## Interactive
+**Interactive**
 
 Built on the command line, that provides a smooth user experience and converting user input into commands and executing them. run it: 
 

@@ -1,3 +1,4 @@
+\newpage
 
 ## vLLM
 
@@ -5,7 +6,7 @@
 
 Because vLLM natively exposes an **OpenAI-compatible server API** (`/v1/chat/completions`), it integrates perfectly with **pgmoneta_mcp** as a backend provider.
 
-### Install
+**Install**
 
 vLLM is a Python package. It is highly recommended to install it in an isolated virtual environment (or via Docker) to avoid dependency conflicts. 
 
@@ -15,15 +16,15 @@ For a basic setup on Rocky Linux 10, you can use pip:
 pip install vllm
 ```
 
-For advanced installation methods (such as Docker or building from source), refer to the [official vLLM installation guide](https://docs.vllm.ai/en/latest/getting_started/installation.html).
+For advanced installation methods (such as Docker or building from source), refer to the [official vLLM installation guide](https://docs.vllm.ai/en/latest/getting_started/installation.html**.
 
-### Download models
+**Download models**
 
 vLLM does not require you to manually hunt for model files. It automatically pulls standard Hugging Face (Safetensor) model weights at runtime.
 
-You simply specify the Hugging Face repository ID (e.g., `ibm-granite/granite-3.0-8b-instruct`).
+You simply specify the Hugging Face repository ID (e.g., `ibm-granite/granite-3.0-8b-instruct**).
 
-### Storage Management
+**Storage Management**
 
 vLLM utilizes the standard Hugging Face cache directory (`~/.cache/huggingface`). Set the `HF_HOME` environment variable to a large mounted drive to prevent disk space exhaustion:
 
@@ -32,9 +33,9 @@ export HF_HOME=/mnt/ai/huggingface
 ```
 
 > [!NOTE]
-> vLLM loads raw unquantized or 16-bit weight SafeTensors by default. Its RAM/VRAM requirements and disk storage needs are therefore **significantly higher** than GGUF equivalents (like llama.cpp or Ollama) unless you explicitly use models pre-quantized in AWQ/GPTQ formats.
+> vLLM loads raw unquantized or 16-bit weight SafeTensors by default. Its RAM/VRAM requirements and disk storage needs are therefore **significantly higher** than GGUF equivalents (like llama.cpp or Ollama** unless you explicitly use models pre-quantized in AWQ/GPTQ formats.
 
-### Start the server
+**Start the server**
 
 Start the vLLM server by pointing the `openai.api_server` entrypoint to your desired model. vLLM will automatically download the model weights to the Hugging Face cache if they are not already present.
 
@@ -62,9 +63,9 @@ HF_HOME=/mnt/ai/huggingface python -m vllm.entrypoints.openai.api_server \
 
 The default endpoint will be `http://localhost:8000`. In pgmoneta MCP
 configuration you can use either `http://localhost:8000` or
-`http://localhost:8000/v1`.
+`http://localhost:8000/v1**.
 
-### Configure pgmoneta_mcp
+**Configure pgmoneta_mcp**
 
 Add or update the `[llm]` section in `pgmoneta-mcp.conf`:
 
@@ -74,9 +75,9 @@ provider = vllm
 endpoint = http://localhost:8000/v1
 model = ibm-granite/granite-3.0-8b-instruct
 max_tool_rounds = 10
-```
+``**
 
-### Quick verification
+**Quick verification**
 
 Confirm the server is running by querying the models endpoint:
 

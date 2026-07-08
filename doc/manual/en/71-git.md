@@ -16,7 +16,7 @@ Here are some links that will help you
 * [How to Squash Commits in Git][git_squash]
 * [ProGit book][progit]
 
-### Basic steps
+**Basic steps*
 
 **Start by forking the repository**
 

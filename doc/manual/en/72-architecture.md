@@ -4,7 +4,7 @@
 
 The pgmoneta MCP server is designed as a secure bridge between MCP clients and the pgmoneta backup server. This document outlines the architectural components and security features.
 
-### Overview
+**Overview*
 
 ```text
 +--------------+          +--------------+          +--------------+
@@ -20,7 +20,7 @@ The pgmoneta MCP server is designed as a secure bridge between MCP clients and t
                           +--------------+
 ```
 
-### Communication Flow
+**Communication Flow*
 
 1. **Authentication Phase**: The MCP server uses SCRAM-SHA-256 to authenticate with the pgmoneta server
 2. **Request Phase**: MCP client sends a request via the MCP protocol
@@ -28,11 +28,11 @@ The pgmoneta MCP server is designed as a secure bridge between MCP clients and t
 4. **Transmission Phase**: Secure transmission over TCP to pgmoneta
 5. **Response Phase**: Reverse transformation of the response
 
-### Security Layer
+**Security Layer*
 
 The security module provides the following capabilities:
 
-#### Compression Algorithms
+** Compression Algorithms*
 
 | Algorithm | Identifier | Description |
 |-----------|------------|-------------|
@@ -44,7 +44,7 @@ The security module provides the following capabilities:
 
 **Default**: `zstd` - provides excellent compression ratios with fast decompression
 
-#### Encryption Algorithms
+** Encryption Algorithms*
 
 | Algorithm | Identifier | Description |
 |-----------|------------|-------------|
@@ -55,7 +55,7 @@ The security module provides the following capabilities:
 
 **Default**: `aes_256_gcm` - industry standard authenticated encryption with PBKDF2 key derivation
 
-### Configuration
+**Configuration*
 
 Security settings are configured in the `[pgmoneta]` section of the configuration file:
 
@@ -67,14 +67,14 @@ compression = zstd
 encryption = aes_256_gcm
 ```
 
-### Data Protection
+**Data Protection*
 
 1. **Key Management**: Master key is stored in `~/.pgmoneta/mcp-master.key` with 0600 permissions
 2. **Key Derivation**: PBKDF2-HMAC-SHA256 with 600,000 iterations
 3. **Password Storage**: Admin passwords are encrypted using AES-256-GCM
 4. **Transport Security**: Full encryption of all communication payloads
 
-### Request/Response Format
+**Request/Response Format*
 
 Each request includes a header specifying compression and encryption modes:
 

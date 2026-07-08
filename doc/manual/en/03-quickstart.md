@@ -40,7 +40,7 @@ pgmoneta -A pgmoneta_admins.conf -c pgmoneta.conf -u pgmoneta_users.conf
 
 ## Configuration
 
-### Master Key
+**Master Key**
 
 First, copy the pgmoneta master key into the MCP home directory. This key is
 used to encrypt admin passwords stored in the MCP user configuration file.
@@ -52,10 +52,10 @@ chmod 600 ~/.pgmoneta-mcp/master.key
 ```
 
 Do this before creating or updating `pgmoneta-mcp-users.conf`. The running
-`pgmoneta-mcp-server` process must use the same `~/.pgmoneta-mcp/master.key`
+`pgmoneta-mcp-server` process must use the same `~/.pgmoneta-mcp/master.key**
 that was used when this users file was created or updated.
 
-### User Configuration
+**User Configuration**
 
 Add an admin user to pgmoneta_mcp. This should be the same user you configured in pgmoneta's admins file.
 
@@ -72,10 +72,10 @@ pgmoneta-mcp-admin -f pgmoneta-mcp-users.conf -U admin -P secretpassword user ad
 The password will be encrypted using the master key and stored in `pgmoneta-mcp-users.conf`.
 
 If the server runs under a different OS user or `HOME`, copy the same key into
-that user's `~/.pgmoneta-mcp/master.key` before starting the server, otherwise
+that user's `~/.pgmoneta-mcp/master.key** before starting the server, otherwise
 password decryption will fail when executing tools.
 
-### Server Configuration
+**Server Configuration**
 
 Create a configuration file called `pgmoneta-mcp.conf` with the following content:
 
@@ -145,7 +145,7 @@ Options:
   -V, --version              Print version
 ```
 
-### Master Key Preparation
+**Master Key Preparation**
 
 Before using `pgmoneta-mcp-admin user ...`, copy the pgmoneta master key into
 the MCP home directory:
@@ -156,7 +156,7 @@ cp ~/.pgmoneta/master.key ~/.pgmoneta-mcp/master.key
 chmod 600 ~/.pgmoneta-mcp/master.key
 ```
 
-### User Management
+**User Management**
 
 **Add a user**:
 
@@ -196,7 +196,7 @@ pgmoneta-mcp-admin -f pgmoneta-mcp-users.conf -U admin user del
 
 ## Connecting MCP Clients
 
-### VS Code with GitHub Copilot
+**VS Code with GitHub Copilot**
 
 **Prerequisites**:
 - VS Code installed
@@ -222,9 +222,9 @@ pgmoneta-mcp-admin -f pgmoneta-mcp-users.conf -U admin user del
 Open a chat (Ctrl + Alt + I) and try:
 - "Say hello to the pgmoneta MCP server"
 - "Get information about the latest backup for server primary"
-- "List all backups for server primary"
+- "List all backups for server primary**
 
-### Claude Desktop
+**Claude Desktop**
 
 Add the following to your Claude Desktop configuration file:
 
@@ -251,17 +251,11 @@ Restart Claude Desktop and the pgmoneta tools will be available.
 This section is a guided exercise in the same spirit as a first practical
 walkthrough. You will create a backup, list backups, and restore one backup.
 
-### Step 1: Take a backup
+**Step 1: Take a backup**
 
 From your MCP client, ask:
 
 - `Take a backup for server primary`
-
-If you prefer explicit tool-call style, use:
-
-```text
-backup {"server":"primary"}
-```
 
 Expected result:
 
@@ -272,17 +266,11 @@ primary (pgmoneta 0.22.0 w/ PostgreSQL 18.1)
 
 A new backup label `20260706113507` is created. You can use this label in the next step, or simply use `latest` to refer to the newest backup.
 
-### Step 2: List backups
+**Step 2: List backups**
 
 Ask:
 
 - `List backups for server primary in descending order`
-
-Or explicit call:
-
-```text
-list_backups {"server":"primary","sort":"desc"}
-```
 
 Expected result:
 
@@ -293,63 +281,19 @@ primary (pgmoneta 0.22.0 w/ PostgreSQL 18.1)
 • 20260706113507 | Full, Backup: 6.03 MB, Restore: 6.02 MB, Valid
 ```
 
-### Step 3: Restore a backup
+**Step 3: Restore a backup**
 
 Choose one backup from Step 2 (or use `latest`) and restore it into an empty
 target directory on the pgmoneta host.
 
 Ask:
 
-- `Restore the latest backup for server primary to /tmp/pgmoneta-restore` 
-
-Or explicit call:
-
-```text
-restore {"server":"primary","backup_id":"latest","directory":"/tmp/pgmoneta-restore"}
-```
+- `Restore the latest backup for server primary to /tmp/pgmoneta-restore`
 
 Expected result:
 
 - The command returns success `true` in `Outcome.Status`
 - The restore target directory contains restored database files
-
-```
-{
-    "Header": {
-        "ClientVersion": "0.21.0",
-        "Command": "restore",
-        "Compression": "zstd",
-        "Encryption": "aes_256_gcm",
-        "Output": 1,
-        "Timestamp": 20260706113726
-    },
-    "Outcome": {
-        "Status": true,
-        "Time": "00:00:7.4182"
-    },
-    "Request": {
-        "Backup": "latest",
-        "Directory": "/tmp/pgmoneta-restore",
-        "Position": "current",
-        "Server": "primary"
-    },
-    "Response": {
-        "Backup": 20260706113634,
-        "BackupSize": "6.03 MB",
-        "BiggestFileSize": "232.00 KB",
-        "Comments": "",
-        "Compression": "zstd",
-        "Encryption": "aes_256_gcm",
-        "Incremental": false,
-        "IncrementalParent": "",
-        "MajorVersion": 18,
-        "MinorVersion": 1,
-        "RestoreSize": "6.02 MB",
-        "Server": "primary",
-        "ServerVersion": "0.22.0"
-    }
-}
-```
 
 If something fails, check the **Troubleshooting** section below and inspect MCP
 server logs.
@@ -398,7 +342,7 @@ tail -f /tmp/pgmoneta_mcp.log
 
 ## Troubleshooting
 
-### Connection Refused
+**Connection Refused*
 
 If you get "Connection refused" errors:
 
@@ -416,7 +360,7 @@ netstat -tuln | grep 5000
 
 3. Verify firewall settings allow connections to the management port
 
-### Authentication Failed
+**Authentication Failed*
 
 If authentication fails:
 
@@ -434,7 +378,7 @@ pgmoneta-mcp-admin -f pgmoneta-mcp-users.conf user ls
 
 3. Ensure passwords match between pgmoneta and pgmoneta_mcp
 
-### Master Key Issues
+**Master Key Issues*
 
 If you get master key errors:
 

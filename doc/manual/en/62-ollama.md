@@ -1,13 +1,14 @@
+\newpage
 
 ## Ollama
 
-[Ollama](https://ollama.com) is the recommended way to get started with local LLM
+[Ollama](https://ollama.com) is a way to get started with local LLM
 support in **pgmoneta_mcp**. It provides a straightforward CLI, a local HTTP API,
 and a simple model management workflow.
 
 This section shows how to install Ollama, prepare a tool-capable model, and configure **pgmoneta_mcp** to use it.
 
-### Install Ollama
+**Install Ollama**
 
 Follow the installation instructions for your platform at
 [ollama.com/download](https://ollama.com/download).
@@ -18,7 +19,7 @@ After installation, verify that the CLI is available:
 ollama --version
 ```
 
-### Start the Ollama service
+**Start the Ollama service**
 
 Ollama serves models over HTTP. Start it with:
 
@@ -36,11 +37,11 @@ Check that it is reachable:
 
 ``` sh
 curl http://localhost:11434/
-```
+``
 
 If the service is up, the response should confirm that Ollama is running.
 
-### Storage Management
+**Storage Management**
 
 By default, Ollama stores models in `/usr/share/ollama/.ollama/models` (or `~/.ollama/models` for user installs). To avoid filling up your root partition, redirect this directory using `OLLAMA_MODELS`:
 
@@ -51,7 +52,7 @@ export OLLAMA_MODELS=/mnt/ai/ollama/models
 # systemctl restart ollama
 ```
 
-### Pull a model
+**Pull a model**
 
 Before using a model, download it locally. The model name here must match exactly what you configure in `pgmoneta-mcp.conf`. For example:
 
@@ -92,7 +93,7 @@ The value in the `NAME` column is the model identifier you must set in your conf
 model = qwen2.5:3b
 ```
 
-### Check tool support
+**Check tool support**
 
 For **pgmoneta_mcp**, the model must support tool calling.
 
@@ -109,9 +110,9 @@ curl -s http://localhost:11434/api/show \
   -d '{"model":"qwen2.5:3b"}'
 ```
 
-Look for `tools` in the reported capabilities.
+Look for `tools** in the reported capabilities.
 
-### Configure pgmoneta_mcp
+**Configure pgmoneta_mcp**
 
 Add or update the `[llm]` section in `pgmoneta-mcp.conf`:
 
