@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
         is_terminal,
     );
     let config = configuration::load_configuration(&args.conf, &args.users)?;
-    let address = format!("{BIND_ADDRESS}:{}", &config.pgmoneta_mcp.port);
+    let address = format!("{BIND_ADDRESS}:{}", config.pgmoneta_mcp.port);
 
     let _guard = Logger::init(
         config.pgmoneta_mcp.log_level.as_str(),
