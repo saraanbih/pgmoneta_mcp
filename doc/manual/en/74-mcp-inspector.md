@@ -1,106 +1,88 @@
 \newpage
 
-## Inspector internals
+# Inspector internals
 
-**Inspector Configuration File**
+This chapter is developer-facing. It describes how `pgmoneta-mcp-inspector`
+maps CLI input and interactive prompts to MCP requests.
 
-The `inspector` command reads connection settings from a conf file.
+## Command structure
 
-Default path:
+The command tree is:
 
-```text
-/etc/pgmoneta-mcp/pgmoneta-mcp-inspector.conf
-```
-
-Expected format:
-
-```ini
-[inspector]
-url = http://localhost:8000/mcp
-timeout = 30
-```
-
-**CLI Hierarchy Tree**
-
-The following tree visualizes the entire command-line structure.
-
-```text
+``` text
 pgmoneta-mcp-inspector
-│
-├── inspector (Connect to MCP server)
-│   ├── --conf -c <CONF>       (Optional: Inspector config path. Default: /etc/pgmoneta-mcp/pgmoneta-mcp-inspector.conf)
-│   │
-│   └── tool (Manage and execute MCP tools)
-│       ├── list (List all available tools on the server)
-│       │   └── --output -o <tree|json> (Default: tree)
-│       │
-│       └── call (Call a specific tool)
-│           ├── <NAME>              (Position 1: Tool name, e.g., get_info)
-│           ├── <ARGS>              (Position 2: Strict JSON arguments. Default: "{}")
-│           ├── --file -f <PATH>    (Optional: Path file containing JSON arguments)
-│           └── --output -o <tree|json> (Default: tree)
-│
-├── interactive (Default) (launch interactive wizard/shell)
-│
-└── --help -h                  (Print help information. Available at any level for context-aware help)
-
-```
----
-
-**Commands**
-
-Execute commands directly.
-
-**1. Listing Tools**
-
-```bash
-./pgmoneta-mcp-inspector inspector --conf <path_to_inspector_conf> tool list
+|
+|-- inspector
+|   |-- --conf -c <CONF>
+|   `-- tool
+|       |-- list
+|       |   `-- --output -o <tree|json>
+|       `-- call
+|           |-- <NAME>
+|           |-- <ARGS>
+|           |-- --file -f <PATH>
+|           `-- --output -o <tree|json>
+|
+|-- interactive
+`-- --help
 ```
 
-**2. Calling a Tool**
+If no command is provided, the inspector launches interactive mode.
 
-```bash
-./pgmoneta-mcp-inspector inspector --conf <path_to_inspector_conf> tool call <tool_name_with_args> '{"key": "value"}'
+## Runtime flow
+
+Command mode follows this flow:
+
+1. Parse the CLI command tree with `clap`
+2. Load `[inspector]` configuration
+3. Connect to the configured MCP endpoint
+4. Run `list_tools` or `call_tool`
+5. Render the result as tree or JSON
+6. Clean up the MCP client session
+
+Interactive mode follows this flow:
+
+1. Prompt for the inspector configuration path
+2. Connect once and show server information
+3. Let the user list tools or select a tool to call
+4. Build arguments from the selected tool schema
+5. Execute the call and render tree output
+6. Return to the menu until the user exits
+
+## Argument parsing
+
+`tool call` accepts either inline strict JSON or a JSON file:
+
+``` sh
+pgmoneta-mcp-inspector inspector --conf <CONF> tool call get_info '{"server":"primary","backup_id":"latest"}'
+pgmoneta-mcp-inspector inspector --conf <CONF> tool call get_info -f /tmp/get-info.json
 ```
 
-```bash
-./pgmoneta-mcp-inspector inspector --conf <path_to_inspector_conf> tool call <tool_name_without_args>
-```
+The file path uses `SafeFileReader` and is limited to 10 MB.
 
-> **Note 1:** The `-f` flag allows you to load data from any file. This is functionally identical to typing directly in the terminal.Max file size supported: **10 MB**
-> ```bash
-> ./pgmoneta-mcp-inspector inspector --conf <path_to_inspector_conf> tool call get_info -f <path_to_args_file>
-> ```
+Interactive mode prompts once per schema property. Empty input skips the key.
+Non-empty input must parse as JSON. A value starting with `@` is treated as a
+file path and the file content is parsed as the JSON value for that property.
 
-**Interactive**
+## Output formatting
 
-Built on the command line, that provides a smooth user experience and converting user input into commands and executing them. run it: 
+The inspector serializes MCP responses to JSON values, recursively decodes JSON
+strings when possible, and then renders one of two output formats:
 
-```bash
-./pgmoneta-mcp-inspector interactive
-```
+- `tree`: ASCII tree output for terminal inspection
+- `json`: pretty JSON output for scripts and automation
 
-Or run with no command to enter interactive mode by default:
+Long plain strings are truncated in tree rendering after 100 characters to keep
+terminal output readable.
 
-```bash
-./pgmoneta-mcp-inspector
-```
+## Extension checklist
 
-> **Note 1 (Strict JSON Inputs):** Because the wizard may assemble a JSON request from your inputs (like the `args` of the `call` tool), every value must be a valid JSON value:
->
-> | Type | Rule | Example |
-> | :--- | :--- | :--- |
-> | String | Must be wrapped in double quotes | `"primary"` |
-> | Number | Enter directly | `123` |
-> | Boolean | Enter directly | `true` or `false` |
-> | Object | Enter full JSON object | `{"key": "value"}` |
-> | Array | Enter full JSON array | `["a", "b", "c"]` |
-> | Null | Enter null keyword | `null` |
-> | Empty (skip) | Leave blank — the key will not be sent | *(press Enter)* |
+When adding or changing inspector behavior:
 
-> **Note 2 (`@path` Injection):** In any argument prompt, type @ followed by a file path to inject the file's content as the value. Max file size supported: **10 MB**.
-> ```
-> @anypath/file.txt
-> ```
-
-> **Note 3 :** You can press **Esc** or **Ctrl+C** during in the interactive wizard to cancel the current action and return to the main menu.
+1. Keep command names and argument names stable unless there is a migration
+   reason to change them.
+2. Ensure `tool list` can discover new server-side tools through the MCP schema.
+3. Validate `tool call` with inline JSON and `--file` JSON.
+4. Validate interactive prompts against the tool schema.
+5. Add or update tests for argument parsing and output formatting.
+6. Update the user-facing Inspector chapter when behavior changes.

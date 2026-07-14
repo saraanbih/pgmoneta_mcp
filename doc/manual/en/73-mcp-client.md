@@ -1,217 +1,117 @@
 \newpage
 
-## Client internals
+# Client internals
 
-**Client Configuration File**
+This chapter is developer-facing. It describes how `pgmoneta-mcp-client`
+turns terminal input into MCP tool calls, how it manages user and model context,
+and where to make changes safely.
 
-The interactive client reads connection settings from a dedicated INI conf file.
+## Runtime flow
 
-Default path:
+The client starts by loading:
 
-```text
-/etc/pgmoneta-mcp/pgmoneta-mcp-client.conf
+- `pgmoneta-mcp-client.conf` for the MCP URL, timeout, and named LLM profiles
+- `pgmoneta-mcp-users.conf` for selectable pgmoneta_mcp users
+- `~/.pgmoneta-mcp/pgmoneta-mcp-client.history` for command history
+
+The high-level loop is:
+
+1. Read a line from the terminal
+2. Record non-empty input in history
+3. Handle comments and slash commands
+4. Parse user-mode or developer-mode input
+5. Inject selected user context where the MCP API requires it
+6. Execute the MCP tool call
+7. Render either translated user output or full JSON output
+
+The prompt follows the selected user and current MCP target. The status header
+tracks MCP reachability separately from active model endpoint reachability.
+
+## Modes
+
+**User mode**
+
+User mode accepts natural-language requests. The client sends available tool
+definitions to the active LLM profile and asks the model to choose a tool and
+produce JSON arguments. The client then validates and executes that tool call.
+
+User mode requires a configured and reachable LLM profile. When multiple LLM
+profiles exist, `[pgmoneta_mcp_client].model` selects the startup profile.
+
+**Developer mode**
+
+Developer mode accepts direct tool calls:
+
+``` text
+list_backups {"server":"primary","sort":"desc"}
 ```
 
-Expected format:
+Developer mode bypasses the LLM and prints the full JSON response. This is the
+preferred path for debugging schemas, adding tests, and documenting exact tool
+behavior.
 
-```ini
-[pgmoneta_mcp_client]
-url = http://localhost:8000/mcp
-timeout = 30
-model = qwen
+## Command handling
 
-[qwen]
-provider = ollama
-endpoint = http://localhost:11434
-model = qwen2.5:3b
-max_tool_rounds = 10
+Slash commands are handled before tool execution:
 
-[gemma]
-provider = llama.cpp
-endpoint = http://localhost:8100/v1
-model = ggml-org/gemma-3-4b-it-GGUF
-max_tool_rounds = 10
-```
-
-The file must contain a `[pgmoneta_mcp_client]` section and may optionally
-include one or more named LLM profile sections using the same keys as
-`pgmoneta-mcp-server.conf`.
-
-**`[pgmoneta_mcp_client]`**
-
-| Key | Required | Description |
-| :--- | :--- | :--- |
-| `url` | Yes | Full MCP endpoint used by the client. This should point to the server's `/mcp` route, for example `http://localhost:8000/mcp`. |
-| `timeout` | No | Connection and request timeout in seconds. Defaults to `30` when omitted. |
-| `model` | No* | Default named LLM profile used for natural-language requests. Required when more than one LLM profile is configured. |
-
-**`[<llm-name>]`**
-
-| Key | Required | Description |
-| :--- | :--- | :--- |
-| `provider` | Yes | LLM backend. Supported values match the server configuration: `ollama`, `llama.cpp`, `ramalama`, and `vllm`. |
-| `endpoint` | Yes | LLM server URL. For `llama.cpp`, `ramalama`, and `vllm`, configure either the server root URL or the OpenAI-compatible `/v1` URL. |
-| `model` | Yes | Model name or ID to use for tool selection. |
-| `max_tool_rounds` | No | Accepted for compatibility with the server's `[llm]` block. Defaults to `10`. |
-
-The section name is the client-visible profile name. Use `/model [llm-name]` to
-switch between these profiles at runtime.
-
-Example with comments:
-
-```ini
-[pgmoneta_mcp_client]
-# Full MCP endpoint used by the client
-url = http://localhost:8000/mcp
-
-# Timeout in seconds for connect, list_tools, and call_tool operations
-timeout = 30
-model = qwen
-
-[qwen]
-# Optional LLM profile for natural-language tool execution
-provider = ollama
-endpoint = http://localhost:11434
-model = qwen2.5:3b
-max_tool_rounds = 10
-
-[gemma]
-provider = llama.cpp
-endpoint = http://localhost:8100/v1
-model = ggml-org/gemma-3-4b-it-GGUF
-max_tool_rounds = 10
-```
-
-**Interactive Shell**
-
-Start the client:
-
-```bash
-./pgmoneta-mcp-client -c pgmoneta-mcp-client.conf -u pgmoneta-mcp-users.conf
-```
-
-The prompt uses the selected username and current MCP target URL:
-
-```text
-admin@localhost:8000/mcp$
-```
-
-The startup header shows the current MCP target URL and active model profile.
-The MCP line uses a green tick or red cross based on MCP server reachability,
-while the model line uses its own green tick or red cross based on active model
-endpoint reachability. The same header is refreshed after `/clear`, `/connect`,
-`/disconnect`, `/reload`, and `/model [name]`. The prompt follows the same
-current MCP target URL, even after a failed `/connect` or after `/disconnect`.
-
-**Commands**
-
-```text
-/clear                Clear the terminal and reprint the status header
-/connect [url]        Connect to [url] or the configured MCP server target
-/disconnect           Disconnect from the current MCP server target
-/reload               Reconnect with the original client URL and model configuration
-/list-models          List configured LLM profiles in a table
+``` text
+/clear
+/connect [url]
+/disconnect
+/reload
+/list-models
 /model
-/model gemma
-/help                 Show basic usage
-/user                 Switch to user mode (default)
-/developer            Switch to developer mode
-/tools                List available tools
-/exit or /quit        Exit the client
+/model <name>
+/help
+/user
+/developer
+/tools
+/exit
+/quit
 ```
 
-The client uses `url` from `pgmoneta-mcp-client.conf` as its default MCP
-endpoint target, derives the tool `server` argument from that configured
-endpoint's host name, and injects `username` from the users file passed with
-`-u` / `--users`. If the users file contains multiple admin usernames, the
-client asks you to choose one at startup. For any remaining parameters, the
-client prompts from the tool schema. Required fields must be filled in, while
-optional fields can be skipped by pressing Enter.
+`/connect [url]` changes the current MCP target. `/connect` without a URL
+returns to the configured target. `/reload` restores the configured target and
+startup model selection, then reconnects.
 
-`/connect [url]` switches the current MCP target URL. If `[url]` is omitted,
-the client reconnects to the configured target from
-`pgmoneta-mcp-client.conf`. If the client is already connected, it disconnects
-before reconnecting.
+Tab completion is available for slash commands and configured model names.
+Ctrl+C uses a two-step quit guard so one accidental interrupt does not exit the
+session.
 
-`/reload` disconnects the current session, restores the MCP target URL and
-active `/model` selection from the client configuration loaded at startup, and
-reconnects with that original state.
+## Context injection
 
-`/clear` clears the current terminal when the client is attached to a real
-terminal and then reprints the current status header.
+The MCP API requires `username` for pgmoneta operations. The client selects a
+user from the users file and injects that `username` automatically before tool
+dispatch. This keeps normal client prompts focused on pgmoneta-specific
+arguments such as `server`, `backup_id`, `directory`, and `sort`.
 
-`/list-models` prints the configured LLM profiles as an aligned table with the
-columns `Name`, `Model`, and `Provider`.
+The client derives display context from the configured MCP endpoint and updates
+that context when `/connect`, `/disconnect`, or `/reload` changes the current
+session.
 
-The client starts in `/user` mode. In this mode it accepts natural-language
-requests. If one or more named LLM profiles are present, it sends the current
-`/tools` definitions to the active LLM, asks it to choose the best matching
-tool, and then executes that tool with the generated JSON arguments. For
-example, `List backups on primary server` maps to
-`list_backups {"server":"primary"}` before execution.
+## Rendering
 
-The `metric` tool accepts a metric name and optional label filters as JSON. Use
-`attributes` to match Prometheus labels exactly:
+User mode favors readable output. Known pgmoneta fields are translated into
+friendlier values where possible, including file sizes, LSNs, compression and
+encryption values, command codes, and error codes.
 
-```text
-metric {"name":"pgmoneta_version"}
-metric {"name":"pgmoneta_retention_server","attributes":{"server":"primary"}}
-metric {"name":"pgmoneta_retention_server","labels":{"server":"primary"}}
-```
+Developer mode favors exact output. It prints the full JSON response so schema
+changes and tool behavior can be inspected directly.
 
-`attributes` and `labels` are equivalent aliases; provide only one of them. If
-you omit the filter object, the tool returns all matching metric samples. In
-user mode, a single matching metric is shown as just its value. In developer
-mode, the full Prometheus sample line is printed, for example:
+Metric rendering has one special case: in user mode, a single matching metric
+can be shown as just its value; in developer mode, the full Prometheus sample
+line is shown.
 
-```text
-pgmoneta_version{version="0.22.0"} 1
-```
+## Extension checklist
 
-Use `/developer` to switch to developer mode. In this mode the input must be an
-explicit tool call such as `list_backups {"server":"primary"}`, and the client
-prints the full JSON response instead of the human-readable translation used in
-user mode.
+When adding or changing a tool:
 
-Non-empty input lines are recorded in history as entered. If the first
-non-whitespace character is `#`, the line is treated as a comment, is still
-recorded in history, does not execute, and immediately shows a fresh prompt.
-
-The shell uses readline-style editing, so standard history and cursor shortcuts
-such as Arrow Up / Down, Home / End, Ctrl+A / E, Ctrl+B / F, Ctrl+R, Ctrl+U / K,
-and Ctrl+Y work directly in the input prompt. Slash commands support Tab
-completion, so typing `/ex` and pressing Tab completes to `/exit`. The `/model`
-command also supports Tab completion for configured LLM profile names. Command
-history is loaded from and saved to
-`~/.pgmoneta-mcp/pgmoneta-mcp-client.history`, and the client keeps at most the
-latest 1000 entries. Press Ctrl+C once to display `Press Ctrl+c again to quit`;
-press Ctrl+C again within 2 seconds to exit, otherwise the pending quit state is
-cleared automatically. Tool errors are printed in the session and do not
-terminate the client. When a tool response is JSON, the client pretty-prints it
-and translates known pgmoneta fields such as file sizes, LSNs, compression,
-encryption, command codes, and error codes into more readable values.
-
-Examples:
-
-```bash
-admin@localhost:8000/mcp$ /clear
-admin@localhost:8000/mcp$ /disconnect
-admin@localhost:8000/mcp$ /connect
-admin@localhost:8000/mcp$ /connect http://localhost:8200/mcp
-admin@localhost:8200/mcp$ /reload
-admin@localhost:8200/mcp$ /disconnect
-admin@localhost:8200/mcp$ /connect
-admin@localhost:8000/mcp$ /list-models
-admin@localhost:8000/mcp$ /user
-admin@localhost:8000/mcp$ /model
-admin@localhost:8000/mcp$ /model gemma
-admin@localhost:8000/mcp$ List backups on primary server
-admin@localhost:8000/mcp$ metric {"name":"pgmoneta_version"}
-admin@localhost:8000/mcp$ /developer
-admin@localhost:8000/mcp$ list_backups {"server":"primary"}
-admin@localhost:8000/mcp$ annotate_backup {"server":"primary","backup_id":"newest","action":"add","key":"mykey","comment":"mycomment"}
-admin@localhost:8000/mcp$ annotate_backup {"server":"primary","backup_id":"newest","action":"update","key":"mykey","comment":"mynewcomment"}
-admin@localhost:8000/mcp$ annotate_backup {"server":"primary","backup_id":"newest","action":"remove","key":"mykey"}
-admin@localhost:8000/mcp$ get_info {"server":"primary","backup_id":"newest"}
-admin@localhost:8000/mcp# metric {"name":"pgmoneta_retention_server","attributes":{"server":"primary"}}
-```
+1. Add or modify the server-side handler and tool registry.
+2. Update the tool schema and argument validation.
+3. Verify user-mode tool selection still maps natural language to the expected
+   tool and JSON arguments.
+4. Verify developer-mode invocation still accepts strict JSON and renders the
+   response correctly.
+5. Add or update tests around parsing, execution, and output formatting.
+6. Update the user-facing tool chapter and any client examples that mention the
+   changed behavior.

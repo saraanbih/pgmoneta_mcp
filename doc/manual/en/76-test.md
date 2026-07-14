@@ -1,8 +1,8 @@
 \newpage
 
-## Test
+# Test
 
-### Overview
+**Overview**
 
 **pgmoneta_mcp** includes comprehensive test coverage at multiple levels:
 
@@ -12,7 +12,7 @@
 
 All tests are written using Rust's built-in testing framework. For project-level integration coverage, use `test/check.sh`; for Rust-only execution, use `cargo test`.
 
-### Dependencies
+**Dependencies**
 
 To install all the required dependencies (rust, make and cargo), simply run `<PATH_TO_PGMONETA_MCP>/test/check.sh setup`. You need to install docker or podman
 separately. The script currently only works on Linux system (we recommend Fedora 39+). 
@@ -23,9 +23,9 @@ separately. The script currently only works on Linux system (we recommend Fedora
 - docker or podman (for container-based tests)
 - make (optional, for convenience scripts)
 
-### Test Types
+**Test Types**
 
-#### Unit Tests
+**Unit Tests**
 
 Unit tests are embedded in the source files using `#[cfg(test)]` modules. They test individual functions and modules without external dependencies.
 
@@ -71,7 +71,7 @@ cargo test -- --nocapture
 - `test_timestamp_format`: Timestamp format validation
 - `test_request_clone`: Request cloning
 
-#### Integration Tests
+**Integration Tests**
 
 Integration tests verify end-to-end functionality using a running pgmoneta server. Most integration tests are located in `tests/info_test.rs` and `tests/list_backup_test.rs`, and they are designed to be run against a matrix of security and compression settings.
 
@@ -94,9 +94,9 @@ cargo test --test list_backup_test -- --ignored
 - `test_handler_initialization` (`tests/handler_test.rs`): Verifies MCP handler initialization and capability reporting.
 - `test_handler_default_trait` (`tests/handler_test.rs`): Verifies `Default` trait implementation for the handler.
 
-### Running Tests
+**Running Tests**
 
-#### Quick Test Run (Unit Tests Only)
+**Quick Test Run (Unit Tests Only)**
 
 ```bash
 cargo test
@@ -104,7 +104,7 @@ cargo test
 
 This runs all unit tests without requiring external dependencies.
 
-#### Full Test Suite (with Container)
+**Full Test Suite (with Container)**
 
 To run the tests, simply run `<PATH_TO_PGMONETA_MCP>/test/check.sh`. The script will build a composed image containing PostgreSQL 18 and pgmoneta, start a docker/podman container using the image (so make sure you at least have one of them installed and have the corresponding container engine started) and run tests. 
 
@@ -112,26 +112,26 @@ The containerized pgmoneta-postgres composed server will have a `backup_user` us
 
 The script then runs pgmoneta_mcp tests in your local environment. The tests are run locally so that you may leverage stdout to debug.
 
-#### Build only (no tests) 
+**Build only (no tests)**
 
 Run `<PATH_TO_PGMONETA>/test/check.sh build` to prepare the test environment (image, master key generation) without running tests. This always does a full build.
 
-### Fast Iteration of testing
+**Fast Iteration of testing**
 Run `<PATH_TO_PGMONETA_MCP>/test/check.sh test` to run the full test suite without rebuilding the composed image.
 
-### Unit tests
+**Unit tests**
 To run unit tests only, simply run `<PATH_TO_PGMONETA_MCP>/test/check.sh unit`
 
-### Integration tests
+**Integration tests**
 To run integration tests only, simply run `<PATH_TO_PGMONETA_MCP>/test/check.sh integration`
 
-### CI matrix-only mode
+**CI matrix-only mode**
 To run CI integration coverage only, run `<PATH_TO_PGMONETA_MCP>/test/check.sh ci`. This mode runs only the 20-combination `info_test` matrix and skips the regular full test suite.
 
-### Single test or module
+**Single test or module**
 Run `<PATH_TO_PGMONETA>/test/check.sh test -m <test_name>`. The script assumes the environment is up, so you need to run the full suite first. For quick iteration, run `<PATH_TO_PGMONETA>/test/check.sh build` once, then `<PATH_TO_PGMONETA>/test/check.sh test -m <module_name>` or `<PATH_TO_PGMONETA>/test/check.sh test` repeatedly.
 
-#### Parallel vs Sequential Testing
+**Parallel vs Sequential Testing**
 
 By default, Rust runs tests in parallel. For integration tests that share resources, run sequentially:
 
@@ -141,9 +141,9 @@ cargo test -- --test-threads=1 --ignored
 
 It is recommended that you **ALWAYS** run tests before raising PR.
 
-### Writing New Tests
+**Writing New Tests**
 
-#### Adding Unit Tests
+**Adding Unit Tests**
 
 Unit tests should be added to the same file as the code they test, in a `#[cfg(test)]` module at the end of the file:
 
@@ -174,7 +174,7 @@ mod tests {
 - Keep tests focused and independent
 - Use `assert_eq!`, `assert!`, `assert_ne!` for clear assertions
 
-#### Adding Integration Tests
+**Adding Integration Tests**
 
 Integration tests should be added to `tests/integration_test.rs`:
 
@@ -205,7 +205,7 @@ async fn test_new_feature() {
 
 For more details, check [Test Organization in Rust](https://doc.rust-lang.org/book/ch11-03-test-organization.html)
 
-### Test Coverage
+**Test Coverage**
 
 To generate test coverage reports:
 
@@ -225,9 +225,9 @@ Open `coverage/index.html` to view the coverage report.
 - Handler module: MCP tool routing, response translation
 - Configuration module: Configuration loading and validation
 
-### Debugging Tests
+**Debugging Tests**
 
-#### Enable Debug Logging
+**Enable Debug Logging**
 
 Set the `RUST_LOG` environment variable:
 
@@ -235,13 +235,13 @@ Set the `RUST_LOG` environment variable:
 RUST_LOG=debug cargo test -- --nocapture
 ```
 
-#### Run Single Test with Output
+**Run Single Test with Output**
 
 ```bash
 cargo test test_name -- --nocapture --test-threads=1
 ```
 
-#### Use `dbg!` Macro
+**Use `dbg!` Macro**
 
 ```rust
 #[test]
@@ -252,7 +252,7 @@ fn test_debug() {
 }
 ```
 
-#### Conditional Compilation for Test Code
+**Conditional Compilation for Test Code**
 
 ```rust
 #[cfg(test)]
@@ -261,7 +261,7 @@ fn test_helper() {
 }
 ```
 
-### Continuous Integration
+**Continuous Integration**
 
 Tests are automatically run in CI/CD pipelines. The CI configuration includes:
 
@@ -270,26 +270,26 @@ Tests are automatically run in CI/CD pipelines. The CI configuration includes:
 - **Unit tests**: `cargo test --lib`
 - **Build verification**: `cargo build --release`
 
-### Cleanup
+**Cleanup**
 
 `<PATH_TO_PGMONETA>/test/check.sh clean` will remove the built image. If you are using docker, chances are it eats your 
 disk space secretly, in that case consider cleaning up using `docker system prune --volume`. Use with caution though as it
 nukes all the docker volumes.
 
-### Port
+**Port**
 
 By default, the container exposes port 5432 for pgmoneta-mcp to connect to.
 
-### Troubleshooting
+**Troubleshooting**
 
-#### Tests Fail with "Configuration not found"
+**Tests Fail with "Configuration not found"**
 
 Ensure configuration files are in the expected locations:
 - `pgmoneta-mcp.conf`
 - `pgmoneta-mcp-users.conf`
 - `~/.pgmoneta-mcp/master.key`
 
-#### Integration Tests Timeout
+**Integration Tests Timeout**
 
 Increase timeout or check if pgmoneta server is running:
 
@@ -301,7 +301,7 @@ ps aux | grep pgmoneta
 netstat -tuln | grep 2345
 ```
 
-#### Tests Fail with "Connection refused"
+**Tests Fail with "Connection refused"**
 
 Ensure pgmoneta server is running and accessible:
 
@@ -313,7 +313,7 @@ pgmoneta -c /path/to/pgmoneta.conf
 ./test/check.sh build
 ```
 
-#### Permission Denied on Master Key
+**Permission Denied on Master Key**
 
 Fix file permissions:
 
@@ -321,7 +321,7 @@ Fix file permissions:
 chmod 600 ~/.pgmoneta-mcp/master.key
 ```
 
-### Test Maintenance
+**Test Maintenance**
 
 - Keep tests up to date with code changes
 - Remove obsolete tests

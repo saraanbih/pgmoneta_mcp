@@ -1,8 +1,8 @@
 \newpage
 
-## Client API
+# Client API
 
-### Overview
+**Overview**
 
 The **Client API** provides low-level communication with the pgmoneta server. It handles TCP connection management, request serialization, response parsing, and the complete request/response lifecycle.
 
@@ -15,7 +15,7 @@ The client module is defined and implemented in `src/client.rs` and `src/handler
 - Read and parse responses from TCP stream
 - Forward requests to pgmoneta server
 
-### Architecture
+**Architecture**
 
 ``` text
 +-----------------------------------------+
@@ -36,7 +36,7 @@ The client module is defined and implemented in `src/client.rs` and `src/handler
 +-----------------------------------------+
 ```
 
-### PgmonetaClient Structure
+**PgmonetaClient Structure**
 
 The `PgmonetaClient` is a zero-sized type that provides static methods for communicating with the pgmoneta server:
 
@@ -46,9 +46,9 @@ pub struct PgmonetaClient;
 
 All methods are associated functions (not instance methods), so no instance creation is needed.
 
-### Request Structure
+**Request Structure**
 
-#### RequestHeader
+**RequestHeader**
 
 The `RequestHeader` contains metadata about the request:
 
@@ -94,7 +94,7 @@ struct RequestHeader {
   - `Encryption::AES_192_GCM` (2): AES-192-GCM
   - `Encryption::AES_128_GCM` (3): AES-128-GCM
 
-#### PgmonetaRequest
+**PgmonetaRequest**
 
 The `PgmonetaRequest` wraps the header and request payload:
 
@@ -128,9 +128,9 @@ where
 }
 ```
 
-### Request Payloads
+**Request Payloads**
 
-#### InfoRequest
+**InfoRequest**
 
 Request structure for getting backup information:
 
@@ -164,7 +164,7 @@ let request = InfoRequest {
 }
 ```
 
-#### ListBackupsRequest
+**ListBackupsRequest**
 
 Request structure for listing backups:
 
@@ -198,9 +198,9 @@ let request = ListBackupsRequest {
 }
 ```
 
-### Core Methods
+**Core Methods**
 
-#### build_request_header
+**build_request_header**
 
 **Signature**:
 ```rust
@@ -231,7 +231,7 @@ let timestamp = Local::now().format("%Y%m%d%H%M%S").to_string();
 // Example: "20260304123045"
 ```
 
-#### connect_to_server
+**connect_to_server**
 
 **Signature**:
 ```rust
@@ -270,7 +270,7 @@ let stream = Self::connect_to_server("admin").await?;
 - `SecurityUtil::decrypt_from_base64_string()`: Decrypt password
 - `SecurityUtil::connect_to_server()`: SCRAM authentication
 
-#### write_request
+**write_request**
 
 **Signature**:
 ```rust
@@ -311,7 +311,7 @@ Self::write_request(&request_str, &mut stream).await?;
 7B 22 48 65 61 64...  // JSON payload: {"Header":...}
 ```
 
-#### read_response
+**read_response**
 
 **Signature**:
 ```rust
@@ -361,7 +361,7 @@ let response_str = Self::read_response(&mut stream).await?;
 - Invalid payload length
 - Incomplete payload read
 
-#### forward_request
+**forward_request**
 
 **Signature**:
 ```rust
@@ -428,9 +428,9 @@ match PgmonetaClient::forward_request("admin", Command::INFO, request).await {
 }
 ```
 
-### Usage Examples
+**Usage Examples**
 
-#### Getting Backup Information
+**Getting Backup Information**
 
 ```rust
 use pgmoneta_mcp::client::PgmonetaClient;
@@ -466,7 +466,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-#### Listing Backups
+**Listing Backups**
 
 ```rust
 use pgmoneta_mcp::client::PgmonetaClient;
@@ -504,7 +504,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-### Response Format
+**Response Format**
 
 All responses from pgmoneta follow a standard format:
 
@@ -533,7 +533,7 @@ All responses from pgmoneta follow a standard format:
 - `ErrorMessage`: Human-readable error message (if outcome is "Error")
 - Additional fields: Response-specific data (varies by command)
 
-### Error Handling
+**Error Handling**
 
 The client API uses `anyhow::Result<T>` for error handling:
 
@@ -576,7 +576,7 @@ match PgmonetaClient::forward_request("admin", Command::INFO, request).await {
 }
 ```
 
-### Configuration Requirements
+**Configuration Requirements**
 
 The client API requires the global configuration to be initialized:
 
@@ -622,9 +622,9 @@ port = 2345
 password = <encrypted_password_base64>
 ```
 
-### Performance Considerations
+**Performance Considerations**
 
-#### Connection Management
+**Connection Management**
 
 - **New connection per request**: Each `forward_request()` call establishes a new TCP connection
 - **Authentication overhead**: SCRAM-SHA-256 handshake adds latency (~10-50ms)
@@ -645,27 +645,27 @@ impl ConnectionPool {
 }
 ```
 
-#### Request Serialization
+**Request Serialization**
 
 - **JSON serialization**: Uses `serde_json` for efficient serialization
 - **Small payloads**: Most requests are < 1 KB
 - **No compression**: Currently no compression is used (could be added)
 
-#### Response Parsing
+**Response Parsing**
 
 - **Streaming**: Response is read in one operation
 - **Memory efficient**: No intermediate buffering
 - **JSON parsing**: Deferred to caller (allows streaming processing)
 
-### Security Considerations
+**Security Considerations**
 
-#### Authentication
+**Authentication**
 
 - **SCRAM-SHA-256**: Strong authentication mechanism
 - **No password in logs**: Passwords are never logged
 - **Encrypted storage**: Passwords encrypted at rest in configuration
 
-#### Network Security
+**Network Security**
 
 - **Plaintext protocol**: Currently no TLS/SSL support
 - **Local network**: Designed for localhost or trusted network
@@ -686,13 +686,13 @@ pub async fn connect_to_server_tls(
 }
 ```
 
-#### Data Validation
+**Data Validation**
 
 - **Input validation**: Request fields are validated before sending
 - **Response validation**: Response format is checked before parsing
 - **Error handling**: All errors are properly propagated
 
-### Debugging
+**Debugging**
 
 Enable debug logging to see detailed client operations:
 
@@ -733,7 +733,7 @@ async fn write_request(request_str: &str, stream: &mut TcpStream) -> anyhow::Res
 }
 ```
 
-### Testing
+**Testing**
 
 The client module should be tested with integration tests:
 
@@ -785,7 +785,7 @@ impl MockPgmonetaServer {
 }
 ```
 
-### References
+**References**
 
 - [pgmoneta Protocol Documentation](https://pgmoneta.github.io/)
 - [SCRAM-SHA-256 RFC 7677](https://datatracker.ietf.org/doc/html/rfc7677)

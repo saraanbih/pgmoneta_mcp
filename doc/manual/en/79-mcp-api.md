@@ -1,8 +1,8 @@
 \newpage
 
-## MCP API
+# MCP API
 
-### Overview
+**Overview**
 
 **pgmoneta_mcp** implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) to enable AI assistants and language models to interact with pgmoneta backup servers. The MCP server exposes pgmoneta's backup management capabilities through a standardized interface that can be consumed by MCP clients.
 
@@ -13,7 +13,7 @@ The MCP implementation is built on top of the [rmcp](https://docs.rs/rmcp/latest
 - **JSON-based communication**: Structured request/response format
 - **Automatic data translation**: Converts raw pgmoneta responses into human-readable formats
 
-### Architecture
+**Architecture**
 
 The MCP server architecture consists of several key components:
 
@@ -43,9 +43,9 @@ The MCP server architecture consists of several key components:
 +-----------------+
 ```
 
-### Core Components
+**Core Components**
 
-#### PgmonetaHandler
+**PgmonetaHandler**
 
 **Location**: `src/handler.rs`
 
@@ -72,7 +72,7 @@ async fn get_info(
 }
 ```
 
-#### PgmonetaClient
+**PgmonetaClient**
 
 **Location**: `src/client.rs`
 
@@ -102,9 +102,9 @@ struct RequestHeader {
 }
 ```
 
-### Available MCP Tools
+**Available MCP Tools**
 
-#### say_hello
+**say_hello**
 
 **Description**: Simple ping tool to verify MCP server connectivity.
 
@@ -119,7 +119,7 @@ struct RequestHeader {
 }
 ```
 
-#### backup
+**backup**
 
 **Description**: Creates a backup for a specified server.
 
@@ -158,7 +158,7 @@ Create an incremental backup:
 }
 ```
 
-#### annotate_backup
+**annotate_backup**
 
 **Description**: Adds, updates, or removes a comment annotation on a backup.
 
@@ -219,7 +219,7 @@ Remove a comment:
 }
 ```
 
-#### get_info
+**get_info**
 
 **Description**: Retrieves detailed information about a specific backup.
 
@@ -267,7 +267,7 @@ Remove a comment:
 }
 ```
 
-#### delete 
+**delete**
 
 **Description**: Deletes a specified backup from the pgmoneta server.
 
@@ -291,7 +291,7 @@ Remove a comment:
 }
 ```
 
-#### list_backups
+**list_backups**
 
 **Description**: Lists all available backups for a specified server.
 
@@ -314,7 +314,7 @@ Remove a comment:
 }
 ```
 
-#### clear
+**clear**
 
 **Description**: Clears/Resets the data/statistics of prometheus.
 
@@ -331,7 +331,7 @@ Remove a comment:
 }
 ```
 
-#### metric
+**metric**
 
 **Description**: Returns Prometheus metric samples exposed by pgmoneta.
 
@@ -384,7 +384,7 @@ pgmoneta_retention_server{server="primary"} 7
 pgmoneta_retention_server{server="standby"} 14
 ```
 
-#### get_metrics
+**get_metrics**
 
 **Description**: Returns the full Prometheus/OpenMetrics exposition exposed by pgmoneta.
 
@@ -419,7 +419,7 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
-#### restore
+**restore**
 **Description**: Restores a backup to a specified directory.
 **Parameters**:
 - `username` (string, required): pgmoneta admin username
@@ -454,7 +454,7 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
-#### archive (Similar to restore, but for archiving backups)
+**archive (Similar to restore, but for archiving backups)**
 **Description**: Archives a backup to a specified directory.
 **Parameters**:
 - `username` (string, required): pgmoneta admin username
@@ -489,7 +489,7 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
-#### retain
+**retain**
 **Description**: Retains a backup and optionally cascades retention to dependent backups.
 **Parameters**:
 - `username` (string, required): pgmoneta admin username
@@ -510,7 +510,7 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
-#### expunge
+**expunge**
 **Description**: Expunges a backup and optionally cascades expunging to dependent backups.
 **Parameters**:
 - `username` (string, required): pgmoneta admin username
@@ -531,7 +531,7 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
-#### ping
+**ping**
 **Description**: Ping pgmoneta to check if pgmoneta is alive.
 **Parameters**:
 - `username` (string, required): pgmoneta admin username
@@ -545,7 +545,7 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
-#### status
+**status**
 **Description**: Get the status of pgmoneta server.
 **Parameters**:
 - `username` (string, required): pgmoneta admin username
@@ -561,25 +561,25 @@ pgmoneta_retention_server{server="standby"} 14
 }
 ```
 
-### Data Translation
+**Data Translation**
 
 The MCP server automatically translates raw pgmoneta responses into human-readable formats:
 
-#### File Size Translation
+**File Size Translation**
 
 Raw byte counts are converted to human-readable formats:
 - `BackupSize`: `1234567890` → `"1.2 GB"`
 - `RestoreSize`: `1610612736` → `"1.5 GB"`
 - `TotalSpace`, `FreeSpace`, `UsedSpace`, etc.
 
-#### LSN Translation
+**LSN Translation**
 
 Log Sequence Numbers are converted to hexadecimal strings:
 - `StartHiLSN`: `439041101` → `"0x1A2B3C4D"`
 - `StartLoLSN`: `1583691920` → `"0x5E6F7890"`
 - `CheckpointHiLSN`, `CheckpointLoLSN`, `EndHiLSN`, `EndLoLSN`
 
-#### Enum Translation
+**Enum Translation**
 
 Numeric enum values are translated to descriptive strings:
 
@@ -605,7 +605,7 @@ Numeric enum values are translated to descriptive strings:
 - `2` → `"Allocation error"`
 - And many more (see `constant.rs` for full list)
 
-### Error Handling
+**Error Handling**
 
 The MCP server uses the `McpError` type from rmcp for standardized error responses:
 
@@ -628,7 +628,7 @@ The MCP server uses the `McpError` type from rmcp for standardized error respons
 }
 ```
 
-### Authentication
+**Authentication**
 
 The MCP server uses SCRAM-SHA-256 for authentication with the pgmoneta server:
 
@@ -639,7 +639,7 @@ The MCP server uses SCRAM-SHA-256 for authentication with the pgmoneta server:
 
 See [Security API documentation](80-security-api.md) for detailed information.
 
-### Configuration
+**Configuration**
 
 The MCP server requires two configuration files:
 
@@ -663,7 +663,7 @@ password = <encrypted_password_base64>
 
 See [Configuration documentation](../CONFIGURATION.md) for complete details.
 
-### Usage Example
+**Usage Example**
 
 **Starting the MCP server**:
 ```bash
@@ -693,7 +693,7 @@ print(f"Latest backup: {result['BackupInfo']['Label']}")
 print(f"Size: {result['BackupInfo']['BackupSize']}")
 ```
 
-### Extending the MCP Server
+**Extending the MCP Server**
 
 To add a new MCP tool:
 
@@ -738,7 +738,7 @@ impl Command {
 }
 ```
 
-### Debugging
+**Debugging**
 
 Enable debug logging to see detailed request/response information:
 
@@ -764,14 +764,14 @@ DEBUG Translated compression: 2 -> "zstd"
 DEBUG Translated backup size: 1234567890 -> "1.2 GB"
 ```
 
-### Performance Considerations
+**Performance Considerations**
 
 - **Connection pooling**: Each tool call establishes a new TCP connection. For high-frequency usage, consider implementing connection pooling.
 - **Response caching**: Backup information changes infrequently. Consider caching responses with appropriate TTL.
 - **Timeout handling**: Configure appropriate timeouts for long-running operations.
 - **Concurrent requests**: The server handles concurrent MCP requests safely.
 
-### Security Considerations
+**Security Considerations**
 
 - **Master key protection**: The master key file must have 0600 permissions
 - **Password encryption**: All passwords are encrypted at rest using AES-256-GCM
@@ -779,7 +779,7 @@ DEBUG Translated backup size: 1234567890 -> "1.2 GB"
 - **Admin-only access**: Only configured admin users can access pgmoneta operations
 - **Audit logging**: All operations are logged with username and timestamp
 
-### References
+**References**
 
 - [Model Context Protocol Specification](https://modelcontextprotocol.io/)
 - [rmcp Documentation](https://docs.rs/rmcp/latest/rmcp/)

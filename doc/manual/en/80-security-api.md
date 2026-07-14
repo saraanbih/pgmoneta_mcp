@@ -1,8 +1,8 @@
 \newpage
 
-## Security API
+# Security API
 
-### Overview
+**Overview**
 
 The **Security API** provides cryptographic operations, authentication mechanisms, and secure key management for **pgmoneta_mcp**. It implements industry-standard security practices to protect sensitive data at rest and in transit.
 
@@ -13,7 +13,7 @@ The security module is defined and implemented in `src/security.rs` and provides
 - **Password generation**: Cryptographically secure password generation
 - **Base64 encoding/decoding**: For encoding binary data in configuration files
 
-### Architecture
+**Architecture**
 
 ``` text
 +--------------------------------------+
@@ -38,7 +38,7 @@ The security module is defined and implemented in `src/security.rs` and provides
 +--------------------------------------+
 ```
 
-### SecurityUtil Structure
+**SecurityUtil Structure**
 
 The `SecurityUtil` struct is the main entry point for all security operations:
 
@@ -53,11 +53,11 @@ pub struct SecurityUtil {
 let security_util = SecurityUtil::new();
 ```
 
-### Master Key Management
+**Master Key Management**
 
 The master key is used to encrypt/decrypt admin passwords stored in the user configuration file. It is stored in `~/.pgmoneta-mcp/master.key` with strict file permissions (0600 on Unix systems).
 
-#### load_master_key
+**load_master_key**
 
 **Signature**:
 ```rust
@@ -87,18 +87,18 @@ let master_key = security_util.load_master_key()?;
 - File permissions are too permissive (automatically corrected)
 - Invalid Base64 encoding
 
-### Encryption and Decryption
+**Encryption and Decryption**
 
 The security module uses **AES-256-GCM** (Galois/Counter Mode) for authenticated encryption, which provides both confidentiality and integrity protection.
 
-#### Encryption Process
+**Encryption Process**
 
 1. **Key derivation**: Master key is derived using **PBKDF2-HMAC-SHA256** (600,000 + 1 iterations)
 2. **Nonce generation**: Random 12-byte nonce is generated
 3. **Encryption**: Plaintext is encrypted using AES-256-GCM
 4. **Packaging**: Nonce + Salt + Ciphertext are concatenated and Base64 encoded
 
-#### encrypt_to_base64_string
+**encrypt_to_base64_string**
 
 **Signature**:
 ```rust
@@ -132,7 +132,7 @@ let encrypted = security_util.encrypt_to_base64_string(
 println!("Encrypted password: {}", encrypted);
 ```
 
-#### decrypt_from_base64_string
+**decrypt_from_base64_string**
 
 **Signature**:
 ```rust
@@ -172,7 +172,7 @@ println!("Decrypted password: {}", password);
 - Insufficient bytes (less than nonce + salt length)
 - Decryption failure (wrong key or corrupted data)
 
-#### Low-level Encryption Functions
+**Low-level Encryption Functions**
 
 **encrypt_text**:
 ```rust
@@ -219,7 +219,7 @@ fn derive_key(master_key: &[u8], salt: &[u8]) -> anyhow::Result<[u8; 32]> {
 - Salt is stored alongside ciphertext (not secret)
 - Derived key is automatically zeroed after use using `Zeroizing`
 
-### SCRAM-SHA-256 Authentication
+**SCRAM-SHA-256 Authentication**
 
 SCRAM-SHA-256 (Salted Challenge Response Authentication Mechanism) is used for authenticating with the pgmoneta server. It provides:
 
@@ -227,7 +227,7 @@ SCRAM-SHA-256 (Salted Challenge Response Authentication Mechanism) is used for a
 - **Mutual authentication**: Both client and server prove knowledge of password
 - **Replay attack protection**: Uses nonces to prevent replay attacks
 
-#### connect_to_server
+**connect_to_server**
 
 **Signature**:
 ```rust
@@ -302,9 +302,9 @@ Length (4 bytes) | Magic (4 bytes) | Parameters (null-terminated strings)
 - `11`: AUTH_SASL_CONTINUE (continue SASL authentication)
 - `12`: AUTH_SASL_FINAL (final SASL message)
 
-### Base64 Encoding
+**Base64 Encoding**
 
-#### base64_encode
+**base64_encode**
 
 **Signature**:
 ```rust
@@ -321,7 +321,7 @@ let encoded = security_util.base64_encode(data)?;
 println!("Encoded: {}", encoded);
 ```
 
-#### base64_decode
+**base64_decode**
 
 **Signature**:
 ```rust
@@ -338,7 +338,7 @@ let decoded = security_util.base64_decode(encoded)?;
 println!("Decoded: {}", String::from_utf8(decoded)?);
 ```
 
-### Memory Safety
+**Memory Safety**
 
 The security module uses Rust's `zeroize` crate to ensure sensitive data is securely erased from memory:
 
@@ -363,15 +363,15 @@ let mut sensitive_data = vec![1, 2, 3, 4];
 sensitive_data.zeroize(); // Explicitly zero the data
 ```
 
-### Security Best Practices
+**Security Best Practices**
 
-#### Master Key Management
+**Master Key Management**
 
 3. **Backup**: Keep secure offline backup of master key
 4. **Rotation**: Rotate master key periodically and re-encrypt all passwords
 5. **Never commit**: Never commit master key to version control
 
-#### Password Management
+**Password Management**
 
 1. **Strong passwords**: Use at least 32 characters for admin passwords
 2. **Unique passwords**: Use different passwords for each admin user
@@ -379,7 +379,7 @@ sensitive_data.zeroize(); // Explicitly zero the data
 4. **No plaintext**: Never store passwords in plaintext
 5. **Secure transmission**: Use SCRAM-SHA-256 for authentication
 
-#### File Permissions
+**File Permissions**
 
 On Unix systems, ensure proper file permissions:
 
@@ -394,14 +394,14 @@ chmod 600 /path/to/pgmoneta-mcp-users.conf
 chmod 600 /path/to/pgmoneta-mcp.conf
 ```
 
-#### Network Security
+**Network Security**
 
 1. **TLS/SSL**: Consider using TLS for pgmoneta connections in production
 2. **Firewall**: Restrict access to pgmoneta port (typically 2345)
 3. **Authentication**: Always use SCRAM-SHA-256 (never trust authentication)
 4. **Monitoring**: Monitor authentication failures and suspicious activity
 
-### Testing
+**Testing**
 
 The security module includes comprehensive unit tests:
 
@@ -436,7 +436,7 @@ fn test_encrypt_decrypt() {
 }
 ```
 
-### Error Handling
+**Error Handling**
 
 All security functions return `anyhow::Result<T>` for comprehensive error handling:
 
@@ -464,7 +464,7 @@ match security_util.decrypt_from_base64_string(&encrypted, &master_key) {
 }
 ```
 
-### Constants
+**Constants**
 
 **Cryptographic constants**:
 ```rust
@@ -483,7 +483,7 @@ const AUTH_SASL_FINAL: i32 = 12;       // Final SASL message
 const MAX_PG_MESSAGE_LEN: usize = 64 * 1024;  // Max PostgreSQL message size
 ```
 
-### References
+**References**
 
 - [AES-GCM](https://en.wikipedia.org/wiki/Galois/Counter_Mode)
 - [scrypt](https://en.wikipedia.org/wiki/Scrypt)
